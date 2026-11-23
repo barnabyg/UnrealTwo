@@ -59,7 +59,7 @@ What the agent measured in play-in-editor (PIE) for each acceptance criterion of
 |---|---|
 | Three types differ in speed, health, look | Approach speeds over a whole night: Shambler 256 to 265 cm/s (nine creatures), Runner 467 and 501, Hunter 165 to 168. Health at spawn 50, 20 and 220. The line-up screenshot shows small yellow, medium purple and large red. |
 | A variant picks a different target | A Hunter that landed at (-1788, -1618) walked to a turret at (650, 0) on the far side of the lighthouse, took it from 60 health to destroyed, and only then went for the lighthouse. |
-| A decision uses an EQS query | **Not met.** See finding F-030. |
+| A decision uses an EQS query | The Hunter's tree runs `EQS_NearestTurret` (made by hand, finding F-034) to choose its turret. With turrets at (-650, 0) and (650, 0) and a Hunter landing at (-1631, 2354), 2550 cm and 3278 cm away, it attacked the nearer one first at 30 s and the other at 46 s. `BehaviorTreeTools.list_nodes` shows `BTTask_RunEQSQuery` in the tree, with that query and the `TargetActor` key. |
 | Wave data mixes types | Types alive while each wave was current: wave one Shambler; wave two Runner and Shambler; wave three Hunter, Runner and Shambler. |
 
 ## #10 Day/night loop

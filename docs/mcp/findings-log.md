@@ -322,3 +322,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** failed
 - **Fallback used:** other MCP tool: delete the placed actor and place it again
 - **Notes:** The beam was added to `BP_Lighthouse` while a lighthouse already stood in the level, and its settings were written to the component template afterwards. The template read back correctly, but the placed lighthouse kept the engine defaults (intensity 5000, radius 1000, at the actor's origin) in the editor and in PIE, so the night had no visible beam. On the placed actor's component, `reset_properties` returned to those class defaults rather than the Blueprint's values, and `set_properties` returned true and changed nothing. Removing the actor and placing the Blueprint again gave an instance with the template's values. Set a component's properties before any instance of the Blueprint is placed, or re-place the instances after.
+
+### F-034: a hand-made EQS query is run from the tree and checked through the MCP
+
+- **Ticket:** #9
+- **Capability:** EQS
+- **Tool used:** `ObjectTools.get_properties`, `AssetTools.get_dependencies`, `BehaviorTreeTools.list_nodes`; editor Python for the tree
+- **Outcome:** worked with a workaround
+- **Fallback used:** manual step for the query, editor Python for the tree
+- **Notes:** This closes the gap left by F-030. A person made `EQS_NearestTurret` in the EQS editor: generator Actors Of Class `BP_Turret` within 10000 cm of the querier, and a Distance test with purpose Score and the Inverse Linear equation, so the nearest turret scores highest. Once the asset exists its parts can be read through the MCP at `EQS_NearestTurret:EnvQueryOption_0.EnvQueryGenerator_ActorsOfClass_0` and `...EnvQueryTest_Distance_0`, which is how the settings were confirmed. `build_creature_ai.py` puts a `BTTask_RunEQSQuery` in the Hunter's tree: the query and `SINGLE_RESULT` run mode go into the task's `eqs_request` struct, and the result into the `TargetActor` blackboard key. A Blueprint task then turns that target into a point to walk to. With no turret standing the query fails and the Selector falls through to the lighthouse plan. In PIE the Hunter attacked the nearer of two turrets first, then the other. The Blueprint task that used to choose the turret, `BTTask_FindTurret`, is deleted.

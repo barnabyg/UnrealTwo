@@ -59,7 +59,7 @@ The map above was written before anything was built. These are the places where 
 | Enhanced Input | Covered in practice by `DataAssetTools` and `ObjectTools`, apart from triggers and modifiers. | F-021 |
 | NavMesh | Covered in practice by scene and settings tools plus one console command. | F-016 |
 | Behaviour Tree | Editor Python can build a whole tree; the MCP's inspect tools then confirm it. | F-017 |
-| EQS | No scripted route at all. Needs a person or C++. | F-030 |
+| EQS | No scripted route to author a query. A person makes it in the EQS editor; editor Python can then put a Run EQS Query task in a tree, and `ObjectTools` can read the query's settings back. | F-030, F-034 |
 | DataTables and DataAssets | Data assets with Blueprint-defined classes cover the need; DataTables stay out of reach without a row struct. | F-028 |
 | UMG | Covered, including layout and fonts through `ObjectTools`. | F-019 |
 | PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. | F-013, F-014, F-027 |
