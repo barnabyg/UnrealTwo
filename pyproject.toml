@@ -1,0 +1,34 @@
+[project]
+name = "beacon-tools"
+version = "0.0.0"
+description = "Agent tooling for the Beacon Unreal project: MCP client and editor Python fallbacks."
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["mypy", "pytest", "pytest-xdist", "ruff"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+# ANN401: tool arguments and results are arbitrary JSON, so `Any` is the honest type.
+ignore = ["ANN401"]
+select = ["ANN", "ARG", "B", "C4", "E", "F", "I", "N", "PL", "PTH", "RET", "RUF", "S", "SIM", "UP", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"Tools/tests/*" = ["S101", "PLR2004"] # pytest assertions and literal expectations
+
+[tool.mypy]
+strict = true
+files = ["Tools/mcp", "Tools/tests"]
+mypy_path = "Tools/mcp"
+
+[tool.pytest.ini_options]
+testpaths = ["Tools/tests"]
+pythonpath = ["Tools/mcp"]
+addopts = "-n auto -W error"
