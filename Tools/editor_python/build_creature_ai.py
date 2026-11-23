@@ -6,11 +6,16 @@ editor Python fallback (finding F-017). It runs inside the editor:
 Running it again rebuilds the assets in place. The last log line starts with
 BUILDAI and says what was written.
 
-A plan is one Sequence: find a target and a point to stand at, walk there, hit
-the target once. The find and attack steps are Blueprint task classes, authored
-through the MCP. A tree with one plan runs it in a loop. A tree with several
+A plan is one Sequence: choose a target and a point to stand at, walk there, hit
+the target once. A choosing step is either a Blueprint task class, authored
+through the MCP, or an EQS query, whose best result goes into the TargetActor
+blackboard key. A tree with one plan runs it in a loop. A tree with several
 tries them in order under a Selector, so the hunter goes for a turret while one
 stands and for the lighthouse otherwise.
+
+The script cannot make an EQS query (finding F-030). EQS_NearestTurret was made
+by hand in the EQS editor: Actors Of Class BP_Turret within 10000 cm of the
+querier, scored by a Distance test with the Inverse Linear equation.
 """
 
 import unreal
@@ -18,10 +23,14 @@ import unreal
 AI_FOLDER = "/Game/Beacon/AI"
 BLACKBOARD = "BB_Creature"
 ATTACK_TASK = "BTTask_AttackTarget"
-# Tree name -> its plans, as (plan name, Blueprint task that chooses the target).
+# Tree name -> its plans, as (plan name, choosing steps). A step named EQS_* is a
+# query asset to run; any other step is a Blueprint task class.
 TREES = {
-    "BT_Creature": [("Attack lighthouse", "BTTask_FindLighthouse")],
-    "BT_Hunter": [("Hunt turret", "BTTask_FindTurret"), ("Attack lighthouse", "BTTask_FindLighthouse")],
+    "BT_Creature": [("Attack lighthouse", ["BTTask_FindLighthouse"])],
+    "BT_Hunter": [
+        ("Hunt turret", ["EQS_NearestTurret", "BTTask_StandBesideTarget"]),
+        ("Attack lighthouse", ["BTTask_FindLighthouse"]),
+    ],
 }
 # How close to the stand point MoveTo must get, in cm. The attack task's range
 # check (BP_Creature.AttackRange) must be larger than this.
@@ -63,6 +72,24 @@ def blueprint_task(tree: unreal.BehaviorTree, name: str) -> unreal.BTTaskNode:
     return task
 
 
+def eqs_task(tree: unreal.BehaviorTree, query_name: str) -> unreal.BTTask_RunEQSQuery:
+    """Run a query and put its single best result in the TargetActor key; fail if it finds nothing."""
+    task = unreal.new_object(unreal.BTTask_RunEQSQuery, outer=tree)
+    task.set_editor_property("node_name", "Query " + query_name.removeprefix("EQS_"))
+    request = task.get_editor_property("eqs_request")
+    request.set_editor_property("query_template", unreal.load_asset(f"{AI_FOLDER}/{query_name}"))
+    request.set_editor_property("run_mode", unreal.EnvQueryRunMode.SINGLE_RESULT)
+    task.set_editor_property("eqs_request", request)
+    key = task.get_editor_property("blackboard_key")
+    key.set_editor_property("selected_key_name", "TargetActor")
+    task.set_editor_property("blackboard_key", key)
+    return task
+
+
+def choosing_step(tree: unreal.BehaviorTree, name: str) -> unreal.BTTaskNode:
+    return eqs_task(tree, name) if name.startswith("EQS_") else blueprint_task(tree, name)
+
+
 def move_to_goal(tree: unreal.BehaviorTree) -> unreal.BTTask_MoveTo:
     move = unreal.new_object(unreal.BTTask_MoveTo, outer=tree)
     move.set_editor_property("node_name", "Move to stand point")
@@ -88,10 +115,11 @@ def composite_child(
     return child
 
 
-def build_plan(tree: unreal.BehaviorTree, name: str, find_task: str) -> unreal.BTComposite_Sequence:
+def build_plan(tree: unreal.BehaviorTree, name: str, choosing: list[str]) -> unreal.BTComposite_Sequence:
     sequence = unreal.new_object(unreal.BTComposite_Sequence, outer=tree)
     sequence.set_editor_property("node_name", name)
-    steps = [blueprint_task(tree, find_task), move_to_goal(tree), blueprint_task(tree, ATTACK_TASK)]
+    steps = [choosing_step(tree, step) for step in choosing]
+    steps += [move_to_goal(tree), blueprint_task(tree, ATTACK_TASK)]
     sequence.set_editor_property("children", [composite_child(task=step) for step in steps])
     return sequence
 
@@ -101,7 +129,7 @@ def build_tree(
 ) -> unreal.BehaviorTree:
     tree = load_or_create(name, unreal.BehaviorTree, unreal.BehaviorTreeFactory())
     tree.set_editor_property("blackboard_asset", blackboard)
-    sequences = [build_plan(tree, plan_name, find_task) for plan_name, find_task in plans]
+    sequences = [build_plan(tree, plan_name, choosing) for plan_name, choosing in plans]
     if len(sequences) == 1:
         root: unreal.BTCompositeNode = sequences[0]
     else:
