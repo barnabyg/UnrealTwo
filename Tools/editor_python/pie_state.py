@@ -37,6 +37,11 @@ def variable(target: unreal.Object, name: str, default: object = None) -> object
         return default
 
 
+def type_name(creature: unreal.Actor) -> str:
+    kind = variable(creature, "CreatureType")
+    return str(variable(kind, "DisplayName", "")) if kind else ""
+
+
 def read_state() -> dict[str, object]:
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world()
     if world is None:
@@ -62,6 +67,7 @@ def read_state() -> dict[str, object]:
             "at": vector(creature.get_actor_location()),
             "health": variable(creature, "Health"),
             "dead": variable(creature, "bDead", False),
+            "type": type_name(creature),
         }
         for creature in actors_of(world, "BP_Creature")
     ]
@@ -70,6 +76,7 @@ def read_state() -> dict[str, object]:
             "at": vector(turret.get_actor_location()),
             "has_target": variable(turret, "bHasTarget", False),
             "type": variable(turret, "TypeName", ""),
+            "health": variable(turret, "Health"),
             "range": variable(turret, "Range"),
         }
         for turret in actors_of(world, "BP_Turret")

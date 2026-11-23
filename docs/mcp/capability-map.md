@@ -47,3 +47,19 @@ For each Beacon feature area: which toolset covers it, or the fallback when noth
 | #8 | No tool creates a DataTable row struct. | Use data assets with a Blueprint-defined class. |
 | #9 | No EQS tool. | Editor Python; otherwise a Blueprint generator. |
 | #18 | No packaging tool. | `RunUAT BuildCookRun` from a shell. |
+
+## Where building Beacon changed the picture
+
+The map above was written before anything was built. These are the places where tickets #4 to #10 proved it wrong or incomplete; the finding has the detail.
+
+| Feature area | What turned out | Finding |
+|---|---|---|
+| Level and actor editing | Saving is the weak point: `save_assets` on a map skips changed actors unless the map file itself is dirty, and `set_actor_transform` resets a scale it was not given. Collision settings cannot be changed with `ObjectTools`. | F-008, F-009, F-015 |
+| Blueprint graph authoring | Works for almost everything through the graph DSL. It cannot write Enhanced Input action events, drops positional arguments to a Blueprint's own functions, and `read_graph_dsl` marks the Blueprint dirty. | F-012, F-018, F-022, F-024, F-025, F-029 |
+| Enhanced Input | Covered in practice by `DataAssetTools` and `ObjectTools`, apart from triggers and modifiers. | F-021 |
+| NavMesh | Covered in practice by scene and settings tools plus one console command. | F-016 |
+| Behaviour Tree | Editor Python can build a whole tree; the MCP's inspect tools then confirm it. | F-017 |
+| EQS | No scripted route at all. Needs a person or C++. | F-030 |
+| DataTables and DataAssets | Data assets with Blueprint-defined classes cover the need; DataTables stay out of reach without a row struct. | F-028 |
+| UMG | Covered, including layout and fonts through `ObjectTools`. | F-019 |
+| PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. | F-013, F-014, F-027 |

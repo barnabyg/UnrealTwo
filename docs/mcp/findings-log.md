@@ -286,3 +286,21 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** none
 - **Notes:** A function's parameters must exist before its body is written; `(fn ApplyType (Type) ...)` on a graph without the parameter fails with "Function parameter(s) not found in graph". The `%` operator has no integer form ("Utilities|Operators|Modulo does not exist"); use `Math|Integer|%(Integer)`. An array element is `Utilities|Array|Get(acopy)`. The same member has different ids from inside and outside its class: `Variables|Character|GetCharacterMovement` in the character's own graph, `Class|Character|GetCharacterMovement` elsewhere. `Rendering|Material|SetVectorParameterValue` resolved to the material parameter collection node, not the dynamic material one; `Rendering|Material|SetVectorParameterValueonMaterials` on the mesh component colours a mesh without that ambiguity. Latent `Delay` nodes work in event chains written by the DSL, including an event that calls itself after the delay, which is how waves are paced.
+
+### F-030: an EQS query cannot be authored by any scripted route
+
+- **Ticket:** #9
+- **Capability:** EQS
+- **Tool used:** none exists; tried `DataAssetTools`-style creation, `ObjectTools.set_properties`, editor Python, the console and `SlateInspectorToolset`
+- **Outcome:** no tool
+- **Fallback used:** manual step, still to be done by a person (see notes)
+- **Notes:** The asset and its parts can be created: an `EnvQuery` with `DataAssetFactory`, and option, generator and test objects with `unreal.new_object` on classes loaded by path. `ObjectTools` then reads and sets the generator's and the test's own settings (`searchedActorClass`, `searchRadius`, `scoringEquation`, `testPurpose`). What cannot be done is joining them. `EnvQuery.Options`, `EnvQueryOption.Generator` and `EnvQueryOption.Tests` are protected: Python answers "is protected and cannot be set", and `ObjectTools.set_properties` answers "the following properties could not be set". The console `set` command answers "Set commands not allowed in the editor". No engine or plugin content contains an `EnvQuery` asset to duplicate. In the EQS graph editor, the Slate inspector exposes the root node's title but not the graph panel or any pin: dragging from the node moved the node, and a right-click found no surface that opens the node menu. `BlueprintTools.create_node` only knows Blueprint node types. What remains is a person adding the generator and test in the EQS editor (about two minutes), or a C++ editor function, which would end Beacon being a Blueprint-only project. Until then the turret-hunter picks its target in a Blueprint task (`BTTask_FindTurret`).
+
+### F-031: creature variants reuse the data, graph and tree routes already found
+
+- **Ticket:** #9
+- **Capability:** Behaviour Tree or StateTree, DataTables and DataAssets
+- **Tool used:** `DataAssetTools.create`, `ObjectTools.set_properties`, `BlueprintTools.write_graph_dsl`; editor Python for the tree
+- **Outcome:** worked
+- **Fallback used:** editor Python: `Tools/editor_python/build_creature_ai.py`
+- **Notes:** A Runner and a Hunter are two more `BP_CreatureType` data assets; one `BP_Creature` class takes speed, health, scale, colour and tree from the asset. The Hunter's tree is a Selector over two plans, "hunt turret" then "attack lighthouse", so it falls back when no turret stands or its turret dies. The build script makes both trees from a table of plans. Measured in PIE: the Hunter closed on the island at about 159 cm/s and the Shambler at about 257 cm/s; the Hunter walked to a turret on the far side from where it landed, took it from 60 health to destroyed, then went for the lighthouse. Creatures for a test are spawned by calling the game mode's `SpawnCreature` from editor Python with `call_method`. Rebuilding a tree leaves any editor graph from an earlier look at the asset out of date; delete the asset first if its structure changes.
