@@ -26,4 +26,4 @@ One command checks the repo's tooling: `pwsh Tools/verify.ps1`. See `docs/agents
 
 ### Checking game changes
 
-Play-in-editor checks are driven through the MCP with no person at the editor. See `docs/agents/verify-loop.md`.
+Play-in-editor checks are driven through the MCP with no person at the editor. See `docs/agents/verify-loop.md`. What was measured for each ticket's acceptance criteria is in `docs/mcp/pie-verification.md`; add to it when a ticket is verified.

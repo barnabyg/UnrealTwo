@@ -64,6 +64,7 @@ def read_state() -> dict[str, object]:
         state["lighthouse_health"] = variable(lighthouses[0], "Health")
     state["creatures"] = [
         {
+            "name": creature.get_name(),
             "at": vector(creature.get_actor_location()),
             "health": variable(creature, "Health"),
             "dead": variable(creature, "bDead", False),
