@@ -331,3 +331,57 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** manual step for the query, editor Python for the tree
 - **Notes:** This closes the gap left by F-030. A person made `EQS_NearestTurret` in the EQS editor: generator Actors Of Class `BP_Turret` within 10000 cm of the querier, and a Distance test with purpose Score and the Inverse Linear equation, so the nearest turret scores highest. Once the asset exists its parts can be read through the MCP at `EQS_NearestTurret:EnvQueryOption_0.EnvQueryGenerator_ActorsOfClass_0` and `...EnvQueryTest_Distance_0`, which is how the settings were confirmed. `build_creature_ai.py` puts a `BTTask_RunEQSQuery` in the Hunter's tree: the query and `SINGLE_RESULT` run mode go into the task's `eqs_request` struct, and the result into the `TargetActor` blackboard key. A Blueprint task then turns that target into a point to walk to. With no turret standing the query fails and the Selector falls through to the lighthouse plan. In PIE the Hunter attacked the nearer of two turrets first, then the other. The Blueprint task that used to choose the turret, `BTTask_FindTurret`, is deleted.
+
+### F-035: menus, buttons and a progress bar are built with the UMG toolset and the graph DSL
+
+- **Ticket:** #11
+- **Capability:** UMG
+- **Tool used:** `UMGToolSet.CreateWidgetBlueprint`, `AddWidget`, `RemoveWidget`, `ToggleWidgetAsVariable`, `BindToEventProperty`, `CompileWidgetBlueprint`, `ObjectTools.set_properties`, `BlueprintTools.write_graph_dsl`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `WBP_MainMenu`, `WBP_GameOver`, `WBP_BuildMenu` and `WBP_BuildEntry` are new, and `WBP_BeaconHUD` gained a `ProgressBar`. `BindToEventProperty` with `eventName: "OnClicked"`, the button's variable name and `propertyClass: /Script/UMG.Button` adds the click event; the DSL then writes its body as `(event OnClicked(PlayButton) ...)`, unlike Enhanced Input events (F-022). A widget that another widget creates is typed `UserWidget` at the `CreateWidget` output, so cast it before setting its variables. The build menu makes one `WBP_BuildEntry` per turret type in a `for` loop over the game mode's `TurretTypes` and adds each to a `VerticalBox` with `Widget|Panel|AddChild`. An entry disables its button with `Widget|SetIsEnabled` while the player's resources are below the type's cost; Slate draws a disabled button and its label dimmed with no further styling. Removing a text block that a graph still reads makes `CompileWidgetBlueprint` fail with "This blueprint (self) is not a TextBlock", and while the Widget Blueprint is in that state `find_node_types` on its graph lists only part of the other Blueprints' members. Rewrite the graph first.
+
+### F-036: set_properties takes its values as a JSON string and says nothing when given an object
+
+- **Ticket:** #11
+- **Capability:** agent workflow
+- **Tool used:** `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** The schema types `values` as a string. Sending a JSON object instead returns `false` for every call with no error text, and nothing is set. Encode the object first (`json.dumps`). A struct can be given in part: `{"font": {"size": 28}}` changes the size and keeps the typeface.
+
+### F-037: the Slate inspector sees and clicks the game's own widgets during PIE
+
+- **Ticket:** #11
+- **Capability:** PIE control
+- **Tool used:** `SlateInspectorToolset.Snapshot`, `Click`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** UMG widgets are Slate widgets, so a snapshot taken while PIE runs lists them: `button "Play" [pos=655,605 size=280,72] [ref=b250]`, each text block with its current text, and `progressbar`. `Click` on a button's ref presses it in the game, which is how the menu, the build menu and the restart were tested without a person. A disabled button is marked `[disabled]`; `Click` on it still returns true and does nothing. Refs change whenever a widget is rebuilt, so take a new snapshot before each click. `beacon_mcp.py click "<label>"` wraps this, and `verify` now clicks Play because the game opens on its menu. The HUD's live values are read the same way, from the snapshot's text lines.
+
+### F-038: two names the engine already uses broke the restart
+
+- **Ticket:** #11
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.add_event`, `write_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none: different names
+- **Notes:** A custom event named `RestartGame` on the game mode Blueprint was created without complaint, but `AGameMode` already has a function of that name. A call written from another Blueprint as `Class|BPBeaconGameMode|RestartGame` became the engine's `Game|RestartGame` node, and that Blueprint failed to compile with "Could not find a function named RestartGame in BP_BeaconGameMode_C". The event is `RestartRun`. Separately, the restart reopens the level with `Game|OpenLevel(byName)` and an option the game mode reads from `OptionsString` with `GameOptions|HasOption`. The option `restart` never arrived: the engine's travel code treats `?restart` as "reload the last URL" and the options string came back empty. The option is `SkipMenu`.
+
+### F-039: more DSL details found while writing the menus
+
+- **Ticket:** #11
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.write_graph_dsl`, `find_node_types`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** A boolean variable's node ids drop the `b` prefix: `bGameOver` is `Variables|Default|GetGameOver` inside its class and `Class|BPBeaconGameMode|GetGameOver` outside, although `read_graph_dsl` prints `(|GetbGameOver)`, which cannot be written back. A variable setter's pins are the value first and `self` second, so `(Class|WBPBuildEntry|SetTypeIndex entry i)` fails with "Could not connect pin"; write `:self entry :TypeIndex i`. `compile_blueprint` returns nothing on success.
+
+### F-040: a Blueprint variable cannot be set from editor Python during PIE unless it is instance editable
+
+- **Ticket:** #11
+- **Capability:** agent workflow
+- **Tool used:** none; editor Python through the console
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python: call a Blueprint function instead
+- **Notes:** `set_editor_property("Resources", 30)` on the running game mode raises "Property 'Resources' ... cannot be edited on instances". Reading works. To put the game in a state for a test, call one of the Blueprint's functions with `call_method("AddResources", args=(-30,))`, or apply damage with `GameplayStatics.apply_damage`.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from beacon_mcp import find_image, strip_images, viewport_panel_ref
+import pytest
+from beacon_mcp import ToolError, find_image, strip_images, viewport_panel_ref, widget_ref
 from gen_inventory import one_line, render
 
 IMAGE = {"mimeType": "image/png", "data": "A" * 400}
@@ -64,3 +65,32 @@ def test_viewport_panel_ref_picks_innermost_large_splitter_narrower_than_window(
 def test_viewport_panel_ref_falls_back_to_whole_window() -> None:
     assert viewport_panel_ref("nothing useful") == ""
     assert viewport_panel_ref('window "Editor" [pos=0,0 size=800,600] [ref=w1]') == ""
+
+
+GAME_UI = "\n".join(
+    [
+        'text "Build - choose a turret" [pos=604,498 size=409,43] [ref=x217]',
+        'button "Sentry  -  cost 25   (selected)" [pos=604,532 size=409,42] [ref=b264]',
+        'button "Sniper  -  cost 40" [disabled] [pos=604,565 size=409,42] [ref=b265]',
+        'button "Play" [pos=655,605 size=280,72] [ref=b250]',
+        'button "Play in a new window" [pos=10,10 size=20,20] [ref=b9]',
+    ]
+)
+
+
+def test_widget_ref_finds_a_button_by_the_start_of_its_label() -> None:
+    assert widget_ref(GAME_UI, "button", "Sentry") == "b264"
+    assert widget_ref(GAME_UI, "text", "Build") == "x217"
+
+
+def test_widget_ref_prefers_an_exact_label_over_a_longer_one() -> None:
+    reordered = "\n".join(reversed(GAME_UI.splitlines()))
+
+    assert widget_ref(reordered, "button", "Play") == "b250"
+
+
+def test_widget_ref_refuses_disabled_and_missing_widgets() -> None:
+    with pytest.raises(ToolError, match="disabled"):
+        widget_ref(GAME_UI, "button", "Sniper")
+    with pytest.raises(ToolError, match="no button"):
+        widget_ref(GAME_UI, "button", "Restart")

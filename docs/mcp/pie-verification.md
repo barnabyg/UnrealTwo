@@ -1,6 +1,6 @@
 # Play-in-editor verification record
 
-What the agent measured in play-in-editor (PIE) for each acceptance criterion of tickets #4 to #10, on 2026-11-23. Every run was started, driven, read and stopped through the MCP as described in [verify-loop.md](../agents/verify-loop.md). Positions are in centimetres; the lighthouse stands at the origin. Game state was read with `Tools/editor_python/pie_state.py`.
+What the agent measured in play-in-editor (PIE) for each acceptance criterion of tickets #4 to #15, on 2026-11-23 and 2026-11-24. Every run was started, driven, read and stopped through the MCP as described in [verify-loop.md](../agents/verify-loop.md). Positions are in centimetres; the lighthouse stands at the origin. Game state was read with `Tools/editor_python/pie_state.py`.
 
 **Clean log.** Each final run below ended with no `Warning:` or `Error:` line added to the Output Log between the start marker and the stop, apart from the expected noise listed in [unreal-mcp.md](../agents/unreal-mcp.md). The same is true of a plain `beacon_mcp.py verify` run on the final commit.
 
@@ -72,3 +72,15 @@ What the agent measured in play-in-editor (PIE) for each acceptance criterion of
 | Night runs that night's waves, each harder | Night one played `DA_Night_1` (3, 6, 9 creatures), night two `DA_Night_2` (6, 9, 12). `DA_Night_3` is 9, 13, 18. Past night three the count scale rises by half per night; that branch was not played. |
 | Lighting differs | Sun intensity 3.0 by day and 0.3 at night; the day and night screenshots. |
 | Beam rotates at night | Beam off by day. At night `bBeamOn` true and its yaw went from -180 to 90 between two samples; the night screenshot shows its pool of light on the ground. |
+
+## #11 HUD and menus
+
+Buttons were pressed with `SlateInspectorToolset.Click` on the game's own widgets, and on-screen text was read from the Slate snapshot (finding F-037).
+
+| Criterion | Evidence |
+|---|---|
+| Main menu on launch, Play starts the game | At PIE start the snapshot lists `text "BEACON"` and `button "Play"`; `started` false, no phase text. After a click on Play: `started` true, phase text "Day 1  -  night 1 falls in 42 s", the HUD on screen. |
+| HUD shows health, phase and night, wave progress, resources, live | Day: "Lighthouse  100 / 100", "Day 1  -  night 1 falls in 41 s", "Resources  60", "Waves: none until nightfall". After 40 damage at night: "Lighthouse  45 / 100", "Night 1", "Wave 2 / 3  -  creatures left: 3", "Resources  30". The countdown fell from 42 to 33 between two captures and the health bar shortened. |
+| Build menu lists types with costs, disables unaffordable | B opens it: buttons "Sentry  -  cost 25   (selected)", "Sniper  -  cost 40", "Sprayer  -  cost 30". A click on Sniper closed the menu and set the selection to Sniper; E then placed a Sniper and resources fell from 60 to 20. With 30 resources the Sniper button is marked `[disabled]` and drawn dimmed, and a click on it changed nothing. |
+| Game over shows the night reached, restart works | Lighthouse to 0 during night one: game paused, "THE LIGHTHOUSE HAS FALLEN", "You reached night 1", `button "Restart"`. After a click on Restart: game time back to 6 s, `started` true with no menu, day one, 60 resources, lighthouse 100, no turrets, and holding W moved the player. |
+| UMG widgets, debug text removed | Five Widget Blueprints under `Content/Beacon/UI`. The game mode, creature, turret and lighthouse graphs no longer contain a `PrintString` node, and the HUD's game-over text block is gone. |

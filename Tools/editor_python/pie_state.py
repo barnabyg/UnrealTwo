@@ -56,6 +56,7 @@ def read_state() -> dict[str, object]:
         "pitch": round(rotation.pitch, 1),
         "falling": pawn.get_movement_component().is_falling(),
         "paused": unreal.GameplayStatics.is_game_paused(world),
+        "started": variable(mode, "bStarted", False),
         "game_over": variable(mode, "bGameOver", False),
         "time": round(unreal.GameplayStatics.get_time_seconds(world), 1),
     }
@@ -91,6 +92,8 @@ def read_state() -> dict[str, object]:
         "text": variable(mode, "WaveText", ""),
     }
     state["turret_text"] = variable(pawn, "TurretText", "")
+    state["selected_turret"] = variable(pawn, "SelectedTurret", 0)
+    state["build_menu_open"] = variable(pawn, "bBuildMenuOpen", False)
     state["phase"] = {
         "night": variable(mode, "bIsNight", False),
         "night_number": variable(mode, "NightNumber", 0),
