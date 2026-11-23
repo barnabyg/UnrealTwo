@@ -70,3 +70,84 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** other: a script client that speaks MCP over HTTP
 - **Notes:** `describe_toolset` for `BlueprintTools` is 72,000 characters, and `find_actors` with no filter lists every actor in the level. Images come back as base64 inside the JSON result. `Tools/mcp/beacon_mcp.py` calls the same `call_tool` endpoint and can print compact signatures (`describe`), save a capture to a PNG (`call ... --png`), and filter log lines (`logs`).
+
+### F-006: the island level is built from primitives and material instances
+
+- **Ticket:** #4
+- **Capability:** level and actor editing, materials
+- **Tool used:** `SceneTools.add_to_scene_from_asset`, `SceneTools.set_actor_folder`, `ActorTools.get_components`, `ObjectTools.set_properties`, `MaterialInstanceTools.create`, `set_vector_parameter`, `set_scalar_parameter`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** Ground, beach, seabed, sea and rocks are scaled `/Engine/BasicShapes` meshes. A mesh gets its material by setting `overrideMaterials` on its StaticMeshComponent. Property names are lowerCamelCase in results but are matched without regard to case when set. An object reference must be the full `Package.Object` path (`/Game/Beacon/Materials/MI_Sea.MI_Sea`); the package path alone fails with "is not a valid object path for property". Asset paths for `add_to_scene_from_asset`, `save_assets` and `exists` are the package path alone.
+
+### F-007: PrimitiveTools and child Blueprints work on Blueprint assets
+
+- **Ticket:** #4
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.create`, `get_default_object`, `compile_blueprint`, `PrimitiveTools.add_cylinder`, `add_cone`, `add_cube`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `BlueprintTools.create` takes the parent class as `asset_type`. Passing another Blueprint's generated class (`..._C`) makes a child Blueprint. Passing the Blueprint's class default object to `PrimitiveTools` adds the shape as a component template named `<Name>_GEN_VARIABLE`, which then takes `ObjectTools.set_properties`. Class defaults such as `defaultPawnClass` are set on `Default__<Name>_C`.
+
+### F-008: collision settings cannot be changed through ObjectTools
+
+- **Ticket:** #4
+- **Capability:** level and actor editing
+- **Tool used:** `ObjectTools.set_properties` on `bodyInstance`
+- **Outcome:** failed
+- **Fallback used:** other MCP tool: `StaticMeshTools.remove_collisions` on a copy of the mesh, and a Blueprint graph for per-channel responses
+- **Notes:** Setting `bodyInstance.collisionEnabled` to `NoCollision` returns true and leaves the value at `QueryAndPhysics`. Setting `collisionProfileName` is stored but not applied, even after reloading the level. For the sea, `AssetTools.duplicate` copied the engine plane to `/Game/Beacon/Meshes/SM_SeaPlane` and `remove_collisions` stripped its simple collision, so the player walks through it. `SceneTools.trace_world` still hits that mesh, so it traces complex collision and cannot confirm this; the PIE walk test did. The boundary walls needed to block pawns but not the camera, which `BP_BoundaryWall` does in its BeginPlay graph with `SetCollisionResponseToChannel`.
+
+### F-009: set_actor_transform resets the scale when the scale is left out
+
+- **Ticket:** #4
+- **Capability:** level and actor editing
+- **Tool used:** `ActorTools.set_actor_transform`
+- **Outcome:** failed
+- **Fallback used:** none: always pass location, rotation and scale
+- **Notes:** The transform type's description says unset fields mean "don't change". Moving the seabed with only `location` reset its scale from (92, 92, 1) to (1, 1, 1), and the player fell out of the world on the next PIE run. Read the transform first and send all three parts back.
+
+### F-010: save_actor fails on actors of a level that stores one file per actor
+
+- **Ticket:** #4
+- **Capability:** level and actor editing
+- **Tool used:** `SceneTools.save_actor`, `AssetTools.save_assets`
+- **Outcome:** failed
+- **Fallback used:** other MCP tool: `AssetTools.save_assets` on the map
+- **Notes:** `save_actor` on a newly placed actor failed with "Asset does not exist: /Game/__ExternalActors__/Beacon/Maps/Lvl_Island/3/T7/..." and "Failed to save 'Sea'". `save_assets` with the map's package path saves the map and every changed external actor file.
+
+### F-011: project settings are written through ConfigSettingsToolset
+
+- **Ticket:** #4
+- **Capability:** level and actor editing
+- **Tool used:** `ConfigSettingsToolset.SetSectionProperties`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** Container `Project`, category `Project`, section `Maps`, with `GameDefaultMap`, `EditorStartupMap` and `GlobalDefaultGameMode` given as `{"refPath": ...}` objects. The tool wrote `Config/DefaultEngine.ini` at once.
+
+### F-012: Blueprint graphs are written with the graph DSL
+
+- **Ticket:** #4
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.get_graph`, `find_node_types`, `get_node_type_pins`, `write_graph_dsl`, `read_graph_dsl`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `find_node_types` gives the type id (`Collision|SetCollisionResponsetoChannel`); a component is read with `Variables|Default|Get<ComponentName>`; enum pins take the value name as a quoted string (`"ECC_Camera"`). `read_graph_dsl` leaves out arguments that equal the pin's default, so a missing argument in the read-back is not an error.
+
+### F-013: PIE is controlled by tools, and the game is driven by console commands
+
+- **Ticket:** #4
+- **Capability:** PIE control, log reading
+- **Tool used:** `EditorAppToolset.StartPIE`, `StopPIE`, `LogsToolset.GetLogEntries`, `SlateInspectorToolset.Type`
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python, to read game state
+- **Notes:** There is no tool for player input or for reading the PIE world. Typing `Input.+key W` and `Input.-key W` into the editor's `Cmd` box holds and releases a key in the running game. `Tools/editor_python/pie_state.py` reads the player pawn through `UnrealEditorSubsystem.get_game_world()` and prints it as a log line. Measured on the island: 1.5 s of W moved the player from x = -1500 to x = -385 (stopped by the lighthouse base), SpaceBar put the player in the air, `Gamepad_RightX` turned the camera 10 degrees, and 11 s of S ended at x = -4240 against the boundary wall. The full procedure is in `docs/agents/verify-loop.md`.
+
+### F-014: CaptureViewport cannot show the running game
+
+- **Ticket:** #4
+- **Capability:** viewport screenshots
+- **Tool used:** `EditorAppToolset.CaptureViewport`, `SlateInspectorToolset.Screenshot`
+- **Outcome:** worked with a workaround
+- **Fallback used:** other MCP tool: `SlateInspectorToolset.Screenshot` on the viewport panel
+- **Notes:** `CaptureViewport` fails without `captureTransform` and without `annotations` ("input param ... needs a default value"), although the schema marks both optional. With both supplied during PIE it renders the editor world from the game camera's position: the player is missing, and editor-only icons and hidden-in-game actors are drawn. `Screenshot` on the viewport's splitter panel returns the pixels on screen, which is the game.

@@ -25,4 +25,4 @@ It needs [uv](https://docs.astral.sh/uv/) and changes no tracked file. GitHub Ac
 
 ## Game content
 
-Blueprints, levels and data assets cannot be checked from a shell. They are verified in the running editor with the verify loop in [verify-loop.md](verify-loop.md): compile, play in editor, read the log, capture a screenshot.
+Blueprints, levels and data assets cannot be checked from a shell. They are verified in the running editor with the verify loop in [verify-loop.md](verify-loop.md): play in editor, drive the game, read the log, capture a screenshot.

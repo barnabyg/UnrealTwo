@@ -23,3 +23,7 @@ How to launch the editor and connect: `docs/agents/unreal-mcp.md`. Before buildi
 ### Verification
 
 One command checks the repo's tooling: `pwsh Tools/verify.ps1`. See `docs/agents/verification.md`.
+
+### Checking game changes
+
+Play-in-editor checks are driven through the MCP with no person at the editor. See `docs/agents/verify-loop.md`.

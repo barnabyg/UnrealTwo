@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from beacon_mcp import find_image, strip_images
+from beacon_mcp import find_image, strip_images, viewport_panel_ref
 from gen_inventory import one_line, render
 
 IMAGE = {"mimeType": "image/png", "data": "A" * 400}
@@ -44,3 +44,23 @@ def test_render_lists_every_toolset_and_reports_describe_failures() -> None:
     assert "**2 toolsets** and **1 tools**" in text
     assert "| `get_label` | Returns the actor's label. |" in text
     assert "`describe_toolset` failed: `boom`" in text
+
+
+def test_viewport_panel_ref_picks_innermost_large_splitter_narrower_than_window() -> None:
+    snapshot = "\n".join(
+        [
+            'window "Beacon - Unreal Editor" [pos=0,0 size=1920,1032] [ref=w1]',
+            "  splitter [pos=0,0 size=1920,1032] [ref=sp1]",
+            "    splitter [pos=4,102 size=1912,894] [ref=sp2]",
+            "      splitter [pos=4,102 size=1526,894] [ref=sp3]",
+            "        splitter [pos=4,102 size=1526,894] [ref=sp4]",
+            "      splitter [pos=1537,431 size=377,563] [ref=sp6]",
+        ]
+    )
+
+    assert viewport_panel_ref(snapshot) == "sp4"
+
+
+def test_viewport_panel_ref_falls_back_to_whole_window() -> None:
+    assert viewport_panel_ref("nothing useful") == ""
+    assert viewport_panel_ref('window "Editor" [pos=0,0 size=800,600] [ref=w1]') == ""

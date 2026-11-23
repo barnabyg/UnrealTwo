@@ -33,8 +33,8 @@ APP = "EditorToolset.EditorAppToolset"
 LOGS = "EditorToolset.LogsToolset"
 SLATE = "SlateInspectorToolset.SlateInspectorToolset"
 
-# Log lines that a clean PIE run must not contain. The MCP's own startup noise
-# (see docs/agents/unreal-mcp.md) is excluded by category below.
+# Log lines that a clean PIE run must not contain, apart from the MCP's own
+# noise (see docs/agents/unreal-mcp.md).
 PROBLEM_PATTERN = r"Error:|Warning:"
 EXPECTED_NOISE = (
     'Call to unknown method "server/discover"',
@@ -42,6 +42,8 @@ EXPECTED_NOISE = (
 )
 
 
+# The level viewport panel covers at least this share of the editor window.
+VIEWPORT_MIN_AREA = 0.4
 # A base64 payload shorter than this is not a screenshot worth special handling.
 MIN_IMAGE_CHARS = 200
 
@@ -188,10 +190,24 @@ class Client:
 
     def capture(self, png: Path, transform: dict[str, Any] | None = None) -> dict[str, Any]:
         """Capture the level viewport to a PNG file and return the capture metadata."""
-        arguments: dict[str, Any] = {}
-        if transform is not None:
-            arguments["captureTransform"] = transform
-        capture: dict[str, Any] = self.call(APP, "CaptureViewport", arguments)
+        # The schema marks captureTransform and annotations optional, but the
+        # server rejects a call without them. Default to the viewport's current
+        # camera and to an overlay with the grid and the labels switched off.
+        if transform is None:
+            transform = self.call(APP, "GetCameraTransform")
+        no_overlay = {
+            "gridSpacing": 0,
+            "gridExtent": 0,
+            "gridHeight": 0,
+            "maxLabelDistance": 0,
+            "classFilter": {"refPath": "/Script/Engine.Actor"},
+            "maxLabels": 0,
+        }
+        capture: dict[str, Any] = self.call(
+            APP,
+            "CaptureViewport",
+            {"captureTransform": transform, "annotations": no_overlay, "bShowUI": False},
+        )
         image = capture.pop("image")
         if not image.get("data"):
             raise ToolError("CaptureViewport returned no image")
@@ -199,20 +215,35 @@ class Client:
         png.write_bytes(base64.b64decode(image["data"]))
         return capture
 
-    def verify(self, png: Path, seconds: float) -> list[str]:
-        """The verify loop: start PIE, wait, capture, stop PIE, return problem log lines."""
-        marker = f"beacon-verify-{time.time_ns()}"
-        self.console(f"py print('{marker}')")
-        self.call(
-            APP,
-            "StartPIE",
-            {"options": {"bSimulate": False, "playMode": "PlayMode_InViewPort", "warmupSeconds": 1.0}},
-        )
-        try:
-            time.sleep(seconds)
-            self.capture(png)
-        finally:
-            self.call(APP, "StopPIE")
+    def capture_game(self, png: Path) -> None:
+        """Save what the level viewport shows right now, including a running PIE game.
+
+        `CaptureViewport` renders the editor world even while PIE is running, so
+        this takes a Slate screenshot of the viewport panel instead.
+        """
+        snapshot: str = self.call(SLATE, "Snapshot", {"ref": "", "maxDepth": 40})
+        image = self.call(SLATE, "Screenshot", {"ref": viewport_panel_ref(snapshot)})
+        png.parent.mkdir(parents=True, exist_ok=True)
+        png.write_bytes(base64.b64decode(image["data"]))
+
+    def pie_state(self) -> dict[str, Any]:
+        """Read the running game's state through Tools/editor_python/pie_state.py."""
+        script = Path(__file__).resolve().parents[1] / "editor_python" / "pie_state.py"
+        for line in reversed(self.run_python(script, 0.3)):
+            if "PIESTATE " in line:
+                state: dict[str, Any] = json.loads(line.split("PIESTATE ", 1)[1])
+                return state
+        raise ToolError("pie_state.py printed no PIESTATE line")
+
+    def start_pie(self, warmup_seconds: float = 2.0) -> None:
+        options = {"bSimulate": False, "playMode": "PlayMode_InViewPort", "warmupSeconds": warmup_seconds}
+        self.call(APP, "StartPIE", {"options": options})
+
+    def stop_pie(self) -> None:
+        self.call(APP, "StopPIE")
+
+    def problems_since(self, marker: str) -> list[str]:
+        """Warning and error log lines written after the marker line, minus expected noise."""
         entries = self.logs("", 0)
         for index, entry in enumerate(entries):
             if marker in entry:
@@ -223,6 +254,41 @@ class Client:
             for entry in entries
             if re.search(PROBLEM_PATTERN, entry) and not any(noise in entry for noise in EXPECTED_NOISE)
         ]
+
+    def mark_log(self) -> str:
+        marker = f"beacon-mark-{time.time_ns()}"
+        self.console(f"py print('{marker}')")
+        return marker
+
+    def verify(self, png: Path, seconds: float) -> list[str]:
+        """The verify loop: start PIE, wait, capture, stop PIE, return problem log lines."""
+        marker = self.mark_log()
+        self.start_pie()
+        try:
+            time.sleep(seconds)
+            self.capture_game(png)
+        finally:
+            self.stop_pie()
+        return self.problems_since(marker)
+
+
+def viewport_panel_ref(snapshot: str) -> str:
+    """Ref of the level viewport panel in a Slate snapshot, or "" for the whole window.
+
+    The viewport has no name in the snapshot. It is the innermost splitter that
+    still covers most of the window without spanning its full width.
+    """
+    window = re.search(r"window .*size=(\d+),(\d+)\]", snapshot)
+    if not window:
+        return ""
+    window_width, window_height = int(window.group(1)), int(window.group(2))
+    best = ""
+    for match in re.finditer(r"splitter \[pos=\d+,\d+ size=(\d+),(\d+)\] \[ref=(sp\d+)\]", snapshot):
+        width, height = int(match.group(1)), int(match.group(2))
+        covers_most = width * height >= VIEWPORT_MIN_AREA * window_width * window_height
+        if covers_most and width < window_width:
+            best = match.group(3)
+    return best
 
 
 def strip_images(value: Any) -> Any:
