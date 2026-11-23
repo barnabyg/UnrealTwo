@@ -1,0 +1,23 @@
+# Unreal Engine generated directories
+/Binaries/
+/DerivedDataCache/
+/Intermediate/
+/Saved/
+/Build/
+/Plugins/*/Binaries/
+/Plugins/*/Intermediate/
+
+# Packaged output
+/Packaged/
+
+# IDE and solution files generated from the .uproject
+/.vs/
+/.idea/
+/.vscode/
+*.sln
+*.suo
+*.VC.db
+*.opensdf
+*.sdf
+*.xcworkspace
+*.xcodeproj
