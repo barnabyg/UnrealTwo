@@ -149,11 +149,11 @@ class Client:
         described: dict[str, Any] = json.loads(self.top_level("describe_toolset", {"toolset_name": toolset}))
         return described
 
-    def logs(self, pattern: str, max_entries: int = 40, category: str = "") -> list[str]:
+    def logs(self, pattern: str, max_entries: int = 40) -> list[str]:
         entries: list[str] = self.call(
             LOGS,
             "GetLogEntries",
-            {"category": category, "pattern": pattern, "maxEntries": max_entries},
+            {"category": "", "pattern": pattern, "maxEntries": max_entries},
         )
         return entries
 
@@ -193,33 +193,6 @@ class Client:
                 return entries[index + 1 :]
         return entries
 
-    def capture(self, png: Path, transform: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Capture the level viewport to a PNG file and return the capture metadata."""
-        # The schema marks captureTransform and annotations optional, but the
-        # server rejects a call without them. Default to the viewport's current
-        # camera and to an overlay with the grid and the labels switched off.
-        if transform is None:
-            transform = self.call(APP, "GetCameraTransform")
-        no_overlay = {
-            "gridSpacing": 0,
-            "gridExtent": 0,
-            "gridHeight": 0,
-            "maxLabelDistance": 0,
-            "classFilter": {"refPath": "/Script/Engine.Actor"},
-            "maxLabels": 0,
-        }
-        capture: dict[str, Any] = self.call(
-            APP,
-            "CaptureViewport",
-            {"captureTransform": transform, "annotations": no_overlay, "bShowUI": False},
-        )
-        image = capture.pop("image")
-        if not image.get("data"):
-            raise ToolError("CaptureViewport returned no image")
-        png.parent.mkdir(parents=True, exist_ok=True)
-        png.write_bytes(base64.b64decode(image["data"]))
-        return capture
-
     def capture_game(self, png: Path) -> None:
         """Save what the level viewport shows right now, including a running PIE game.
 
@@ -228,8 +201,7 @@ class Client:
         """
         snapshot: str = self.call(SLATE, "Snapshot", {"ref": "", "maxDepth": 40})
         image = self.call(SLATE, "Screenshot", {"ref": viewport_panel_ref(snapshot)})
-        png.parent.mkdir(parents=True, exist_ok=True)
-        png.write_bytes(base64.b64decode(image["data"]))
+        write_png(png, image["data"])
 
     def pie_state(self) -> dict[str, Any]:
         """Read the running game's state through Tools/editor_python/pie_state.py."""
@@ -311,11 +283,24 @@ def viewport_panel_ref(snapshot: str) -> str:
     return best
 
 
+def write_png(png: Path, base64_data: str) -> None:
+    png.parent.mkdir(parents=True, exist_ok=True)
+    png.write_bytes(base64.b64decode(base64_data))
+
+
+def image_data(value: dict[str, Any]) -> str | None:
+    """The base64 payload if this dict is an image result, as the toolsets return them."""
+    data = value.get("data")
+    if "mimeType" in value and isinstance(data, str) and len(data) > MIN_IMAGE_CHARS:
+        return data
+    return None
+
+
 def strip_images(value: Any) -> Any:
     """Replace base64 image payloads so results stay printable."""
     if isinstance(value, dict):
-        data = value.get("data")
-        if "mimeType" in value and isinstance(data, str) and len(data) > MIN_IMAGE_CHARS:
+        data = image_data(value)
+        if data is not None:
             return {"mimeType": value["mimeType"], "data": f"<{len(data)} base64 chars>"}
         return {key: strip_images(item) for key, item in value.items()}
     if isinstance(value, list):
@@ -325,8 +310,8 @@ def strip_images(value: Any) -> Any:
 
 def find_image(value: Any) -> str | None:
     if isinstance(value, dict):
-        data = value.get("data")
-        if "mimeType" in value and isinstance(data, str) and len(data) > MIN_IMAGE_CHARS:
+        data = image_data(value)
+        if data is not None:
             return data
         value = list(value.values())
     if isinstance(value, list):
@@ -383,8 +368,7 @@ def run_call(client: Client, args: argparse.Namespace) -> None:
         data = find_image(result)
         if data is None:
             raise ToolError("the result contains no image")
-        args.png.parent.mkdir(parents=True, exist_ok=True)
-        args.png.write_bytes(base64.b64decode(data))
+        write_png(args.png, data)
     print(json.dumps(strip_images(result), indent=1))
 
 
