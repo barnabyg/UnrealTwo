@@ -57,6 +57,9 @@ class Client:
     """One MCP session against the editor."""
 
     def __init__(self, url: str = URL) -> None:
+        # The editor's server has no authentication and listens on loopback only.
+        if not url.startswith(("http://127.0.0.1:", "http://localhost:")):
+            raise ValueError(f"the Unreal MCP client only talks to a loopback http URL, not {url}")
         self.url = url
         self.session_id: str | None = None
         self.next_id = 0
@@ -68,7 +71,8 @@ class Client:
         }
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
-        request = urllib.request.Request(  # noqa: S310 - fixed loopback http URL
+        # S310 (audit URL open for permitted schemes): __init__ accepts loopback http URLs only.
+        request = urllib.request.Request(  # noqa: S310
             self.url, data=json.dumps(payload).encode("utf-8"), headers=headers
         )
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
