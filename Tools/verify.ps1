@@ -16,6 +16,10 @@ Invoke-Gate 'install' { uv sync --locked --group dev --quiet }
 Invoke-Gate 'format' { uv run --no-sync ruff format --check . }
 Invoke-Gate 'lint' { uv run --no-sync ruff check . }
 Invoke-Gate 'types' { uv run --no-sync mypy }
-$bail = if ($env:CI) { @('--maxfail=1') } else { @() }
-Invoke-Gate 'tests' { uv run --no-sync pytest @bail }
+# CI stops at the first failing test; a local run reports them all. The array is typed
+# because an `if` expression unwraps a one-element array to a string, and splatting a
+# string passes it one character at a time.
+[string[]]$failFast = @()
+if ($env:CI) { $failFast = @('--maxfail=1') }
+Invoke-Gate 'tests' { uv run --no-sync pytest @failFast }
 Write-Host 'verify: all gates passed'
