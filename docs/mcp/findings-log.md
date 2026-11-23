@@ -160,3 +160,48 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** failed
 - **Fallback used:** editor Python: `Tools/editor_python/save_dirty.py`, run with `beacon_mcp.py save`
 - **Notes:** This corrects F-010. In a level that stores one file per actor, `save_assets` on the map saved the actor files only while the map package itself was dirty (in #4, right after a WorldSettings change). Later actor edits left the map package clean; `save_assets` then returned true and wrote nothing, and `is_dirty` on the map said false, while 54 actor packages were unsaved. The boundary wall swap and the seabed fix from #4 were committed unsaved for that reason. `save_assets` and `save_actor` on the actor packages both fail with "Asset does not exist". The script calls `EditorLoadingAndSavingUtils.save_dirty_packages` and reports the unsaved count before and after. Check `git status` after saving a level.
+
+### F-016: the NavMesh is set up with generic scene and settings tools
+
+- **Ticket:** #5
+- **Capability:** NavMesh
+- **Tool used:** `SceneTools.add_to_scene_from_class`, `ActorTools.set_actor_transform`, `ConfigSettingsToolset.SetSectionProperties`, `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** other MCP tool: the console command `RebuildNavigation` through the Slate inspector
+- **Notes:** Placing `/Script/NavigationSystem.NavMeshBoundsVolume` gives a 200 cm cube brush; scaling the actor to (40, 40, 8) covers the island, and the editor creates the `RecastNavMesh` actor by itself. Runtime generation was set to `Dynamic` in project settings (section `NavigationMesh`) and again on the existing `RecastNavMesh` actor, which keeps the value it was created with. PIE then warned "Recreating dtNavMesh instance ... due mismatch in number of bytes required to store serialized maxTiles" until `RebuildNavigation` was run and the level saved. A path query from behind a rock returned a three-point path around its corner (2357 cm against 2328 cm straight).
+
+### F-017: the Behaviour Tree is built with editor Python
+
+- **Ticket:** #5
+- **Capability:** Behaviour Tree or StateTree
+- **Tool used:** none for authoring; `BehaviorTreeTools.list_nodes`, `get_node_depths`, `get_blackboard` to check the result
+- **Outcome:** no tool
+- **Fallback used:** editor Python: `Tools/editor_python/build_creature_ai.py`
+- **Notes:** The script creates `BB_Creature` and `BT_Creature` with their factories, makes node objects with `unreal.new_object(..., outer=tree)` and wires them through `BTCompositeNode.children` and `BehaviorTree.root_node`, which 5.8 exposes. Three things were not obvious. The Blackboard key type classes are not Python names and are loaded with `unreal.load_class(None, "/Script/AIModule.BlackboardKeyType_Vector")`. `BTTask_MoveTo.acceptable_radius` is a `ValueOrBBKey_Float` struct, so its `default_value` is set instead of assigning a float. Nodes are reached with `set_editor_property` even though `dir()` lists only `node_name`. The tree has no editor graph when written; opening it in the Behaviour Tree editor rebuilt the graph from the asset, kept all four nodes, and marked the asset dirty. The tree ran in PIE unchanged.
+
+### F-018: lessons from writing gameplay graphs with the DSL
+
+- **Ticket:** #5
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.add_event`, `add_function_graph`, `add_variable`, `add_object_variable`, `write_graph_dsl`, `read_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** An event's DSL name is not its function name: `ReceiveExecuteAI` is `AI|EventReceiveExecuteAI`, `ReceiveAnyDamage` is `Game|Damage|EventAnyDamage`, and a custom event is `Custom|<Name>`. Create the node with `add_event`, then `read_graph_dsl` to see the name. Writing an event again replaces its old chain. A `Name (by ref)` pin rejects a literal ("Could not set value ... on pin KeyName"); feed it from `Utilities|Name|MakeLiteralName`. Another Blueprint's variable is `Class|BPCreature|GetHealth`, with the underscore of `BP_Creature` dropped; a Blueprint's own function is `CallFunction|<Name>`. A `bind` of a pure expression is not a stored value: every node that reads it evaluates it again. Binding `health - damage`, setting the health, then comparing the bound value subtracted the damage twice, so read the variable again after setting it.
+
+### F-019: the HUD is a Widget Blueprint; on-screen debug text did not show
+
+- **Ticket:** #5
+- **Capability:** UMG
+- **Tool used:** `UMGToolSet.CreateWidgetBlueprint`, `AddWidget`, `RenameWidget`, `ToggleWidgetAsVariable`, `CompileWidgetBlueprint`, `ObjectTools.list_properties`, `set_properties`, `BlueprintTools.write_graph_dsl`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `Development|PrintString` with `bPrintToScreen` wrote to the log but drew nothing in the PIE viewport, so the lighthouse health and the game-over message moved to `WBP_BeaconHUD`. Text blocks sit on a canvas panel; anchors, offsets and auto-size are the slot's `layoutData`, and font size and colour are the text block's `font` and `colorAndOpacity`, all set with `ObjectTools`. A text block must be toggled to a variable before the graph can read it as `Variables|WBP_BeaconHUD|Get<Name>`. The HUD's tick graph reads the lighthouse and the game mode each frame.
+
+### F-020: one project setting removes an AI warning at the end of every PIE run
+
+- **Ticket:** #5
+- **Capability:** NavMesh
+- **Tool used:** `ConfigSettingsToolset.SetSectionProperties`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** Once an AI controller existed, stopping PIE logged "LogCrowdFollowing: Warning: Unable to find RecastNavMesh instance while trying to create UCrowdManager instance". Beacon does not use crowd following, so `crowdManagerClass` in section `NavigationSystem` was set to null, which writes `CrowdManagerClass=None`.
