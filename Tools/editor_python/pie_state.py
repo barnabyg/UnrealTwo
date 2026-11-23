@@ -66,10 +66,24 @@ def read_state() -> dict[str, object]:
         for creature in actors_of(world, "BP_Creature")
     ]
     state["turrets"] = [
-        {"at": vector(turret.get_actor_location()), "has_target": variable(turret, "bHasTarget", False)}
+        {
+            "at": vector(turret.get_actor_location()),
+            "has_target": variable(turret, "bHasTarget", False),
+            "type": variable(turret, "TypeName", ""),
+            "range": variable(turret, "Range"),
+        }
         for turret in actors_of(world, "BP_Turret")
     ]
     state["notice"] = variable(mode, "Notice", "")
+    state["wave"] = {
+        "index": variable(mode, "WaveIndex", 0),
+        "spawned": variable(mode, "SpawnedInWave", 0),
+        "alive": variable(mode, "AliveCreatures", 0),
+        "all_spawned": variable(mode, "bAllWavesSpawned", False),
+        "victory": variable(mode, "bVictory", False),
+        "text": variable(mode, "WaveText", ""),
+    }
+    state["turret_text"] = variable(pawn, "TurretText", "")
     return state
 
 

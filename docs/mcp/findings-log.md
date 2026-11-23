@@ -268,3 +268,21 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** none
 - **Notes:** A turret kills a creature in 2.5 s of game time. With the editor in the background at about 3 frames a second, each tool call costs a noticeable slice of that, and three attempts to capture the turret firing missed. Typing `slomo 0.15` into the `Cmd` box after the setup stretched the engagement enough to read the state and take the screenshot; `slomo 1` restores normal speed. Positioning the player for a test is done with a few lines of editor Python that move the pawn and set the control rotation.
+
+### F-028: waves and turret types are data assets with Blueprint-defined classes
+
+- **Ticket:** #8
+- **Capability:** DataTables and DataAssets
+- **Tool used:** `BlueprintTools.create`, `add_variable`, `add_object_variable`, `DataAssetTools.create`, `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** other MCP tool: data assets instead of a DataTable
+- **Notes:** A DataTable needs a row struct and no tool creates one, so the data lives in data assets. `BlueprintTools.create` with parent `/Script/Engine.PrimaryDataAsset` makes the class (`BP_WaveData`, `BP_NightData`, `BP_TurretType`, `BP_CreatureType`); its variables are the columns. `add_object_variable` with `container_type: "ARRAY"` gives a list of references to other data assets, which is how a night lists its waves and a wave lists its creature types. `DataAssetTools.create` takes the Blueprint's generated class (`..._C`) and `set_properties` fills an instance in one call, including arrays of `{"refPath": ...}`. Changing `Count` on `DA_Wave_N1_1` from 3 to 1 with `set_properties` changed the next PIE run from three creatures in wave one to one, with no graph touched.
+
+### F-029: more DSL details found while writing the wave director
+
+- **Ticket:** #8
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.add_function_graph`, `add_function_param`, `add_object_function_param`, `write_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** A function's parameters must exist before its body is written; `(fn ApplyType (Type) ...)` on a graph without the parameter fails with "Function parameter(s) not found in graph". The `%` operator has no integer form ("Utilities|Operators|Modulo does not exist"); use `Math|Integer|%(Integer)`. An array element is `Utilities|Array|Get(acopy)`. The same member has different ids from inside and outside its class: `Variables|Character|GetCharacterMovement` in the character's own graph, `Class|Character|GetCharacterMovement` elsewhere. `Rendering|Material|SetVectorParameterValue` resolved to the material parameter collection node, not the dynamic material one; `Rendering|Material|SetVectorParameterValueonMaterials` on the mesh component colours a mesh without that ambiguity. Latent `Delay` nodes work in event chains written by the DSL, including an event that calls itself after the delay, which is how waves are paced.
