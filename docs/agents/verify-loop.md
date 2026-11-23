@@ -35,6 +35,9 @@ Input.+key W            hold W
 Input.-key W            release W
 Input.+key SpaceBar     jump
 Input.+key Gamepad_RightX 1     turn the camera right
+Input.+key LeftMouseButton      fire
+Input.+key E            place a turret
+slomo 0.15              slow the game down to catch a short event; slomo 1 restores it
 ```
 
 From a script, with the client in `Tools/mcp/beacon_mcp.py`:

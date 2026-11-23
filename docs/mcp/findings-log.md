@@ -241,3 +241,30 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** editor Python: `save_dirty.py` saves only packages under `/Game/Beacon`
 - **Notes:** Reading the template controller's graph to learn how it adds mapping contexts left `/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController` dirty. `list_variables` and `get_graph` did not; `read_graph_dsl` did, on every call. The next save-everything rewrote two template Blueprints that nobody had changed. `save_dirty.py` now skips packages outside Beacon's own content and lists what it skipped.
+
+### F-025: DSL calls can drop arguments or pick the wrong overload without an error
+
+- **Ticket:** #7
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.write_graph_dsl`, `get_node_infos`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** `(CallFunction|Notify "Turret placed")` compiled, but the `Message` pin stayed empty and every notice in the game was blank. A positional argument to a Blueprint's own function is not applied; `(CallFunction|Notify :Message "Turret placed")` is. Two nodes share the id `Pawn|GetControlRotation`; the DSL picked the Controller's, and the Blueprint failed to compile with "This blueprint (self) is not a Controller". Passing `:self (Pawn|GetController)` made that choice valid. After writing a graph, read each call's pin values with `get_node_infos` rather than trusting the DSL read-back.
+
+### F-026: components are parented with set_parent_component, in the parent's scaled space
+
+- **Ticket:** #7
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `PrimitiveTools.add_sphere`, `add_cube`, `ActorTools.set_parent_component`, `ObjectTools.set_properties`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** The turret's barrel is a child of its head so that turning the head turns both. `set_parent_component` works on Blueprint component templates. The child keeps its numbers but they now mean "relative to the parent", and a primitive's size is its scale: under a sphere of radius 32 (scale 0.64) the barrel's offset and scale had to be divided by 0.64.
+
+### F-027: slow motion makes short events capturable
+
+- **Ticket:** #7
+- **Capability:** PIE control, viewport screenshots
+- **Tool used:** `SlateInspectorToolset.Type` (console), `SlateInspectorToolset.Screenshot`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** A turret kills a creature in 2.5 s of game time. With the editor in the background at about 3 frames a second, each tool call costs a noticeable slice of that, and three attempts to capture the turret firing missed. Typing `slomo 0.15` into the `Cmd` box after the setup stretched the engagement enough to read the state and take the screenshot; `slomo 1` restores normal speed. Positioning the player for a test is done with a few lines of editor Python that move the pawn and set the control rotation.
