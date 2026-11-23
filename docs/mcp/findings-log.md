@@ -232,3 +232,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** failed
 - **Fallback used:** other MCP tool: a BeginPlay graph
 - **Notes:** `BP_BeaconCharacter` inherits its camera boom from the template character. `get_components` on the child's class default object returns the boom, and setting `socketOffset` on it returned true and read back correctly, but the camera did not move in PIE. Components a Blueprint adds itself (F-007) do keep their properties. The offset is now set in BeginPlay with `Class|SpringArmComponent|SetSocketOffset`.
+
+### F-024: read_graph_dsl marks the Blueprint it reads as unsaved
+
+- **Ticket:** #6
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.read_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python: `save_dirty.py` saves only packages under `/Game/Beacon`
+- **Notes:** Reading the template controller's graph to learn how it adds mapping contexts left `/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController` dirty. `list_variables` and `get_graph` did not; `read_graph_dsl` did, on every call. The next save-everything rewrote two template Blueprints that nobody had changed. `save_dirty.py` now skips packages outside Beacon's own content and lists what it skipped.
