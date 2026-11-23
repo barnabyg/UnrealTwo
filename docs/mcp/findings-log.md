@@ -304,3 +304,21 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked
 - **Fallback used:** editor Python: `Tools/editor_python/build_creature_ai.py`
 - **Notes:** A Runner and a Hunter are two more `BP_CreatureType` data assets; one `BP_Creature` class takes speed, health, scale, colour and tree from the asset. The Hunter's tree is a Selector over two plans, "hunt turret" then "attack lighthouse", so it falls back when no turret stands or its turret dies. The build script makes both trees from a table of plans. Measured in PIE: the Hunter closed on the island at about 159 cm/s and the Shambler at about 257 cm/s; the Hunter walked to a turret on the far side from where it landed, took it from 60 health to destroyed, then went for the lighthouse. Creatures for a test are spawned by calling the game mode's `SpawnCreature` from editor Python with `call_method`. Rebuilding a tree leaves any editor graph from an earlier look at the asset out of date; delete the asset first if its structure changes.
+
+### F-032: the day/night loop is Blueprint graphs over data, with lights driven from nodes
+
+- **Ticket:** #10
+- **Capability:** lighting, Blueprint graph authoring, Enhanced Input
+- **Tool used:** `BlueprintTools.write_graph_dsl`, `ActorTools.add_component`, `ObjectTools.set_properties`, `DataAssetTools.create`, `UMGToolSet.AddWidget`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** The game mode holds the phase, the night number, the resources and a list of night data assets. Lighting is switched from a graph: the level's directional light and sky light are found with `Actor|GetActorOfClass`, their components with `Actor|GetComponentbyClass` plus a cast, and intensity and colour set with `Rendering|Components|Light|SetIntensity` and `SetLightColor`. The lighthouse beam is a `SpotLightComponent` added to the Blueprint with `ActorTools.add_component`, shown at night and turned each tick with `Transformation|AddWorldRotation`. A function named `SetBeam` clashed with the setter of the component variable `Beam` (two nodes with the id `Class|BPLighthouse|SetBeam`), so it is called `SwitchBeam`. A multi-exec call such as a cast or `Utilities|IsValid` ends the statement list it is in, so a function that needs two of them in a row calls two helper functions. Measured in PIE: eight pickups by day, +10 resources on walking over one, a Sentry for 25 and a Sniper for 40, a Sprayer refused at 15 resources, sun intensity 3.0 by day and 0.3 at night, the beam's yaw moving at night, +20 and a new day after the night's last creature died, and night two playing `DA_Night_2`.
+
+### F-033: Blueprint component changes do not reach an actor already placed in the level
+
+- **Ticket:** #10
+- **Capability:** level and actor editing
+- **Tool used:** `ObjectTools.set_properties`, `reset_properties`, `SceneTools.remove_from_scene`, `add_to_scene_from_asset`
+- **Outcome:** failed
+- **Fallback used:** other MCP tool: delete the placed actor and place it again
+- **Notes:** The beam was added to `BP_Lighthouse` while a lighthouse already stood in the level, and its settings were written to the component template afterwards. The template read back correctly, but the placed lighthouse kept the engine defaults (intensity 5000, radius 1000, at the actor's origin) in the editor and in PIE, so the night had no visible beam. On the placed actor's component, `reset_properties` returned to those class defaults rather than the Blueprint's values, and `set_properties` returned true and changed nothing. Removing the actor and placing the Blueprint again gave an instance with the template's values. Set a component's properties before any instance of the Blueprint is placed, or re-place the instances after.

@@ -87,10 +87,29 @@ def read_state() -> dict[str, object]:
         "spawned": variable(mode, "SpawnedInWave", 0),
         "alive": variable(mode, "AliveCreatures", 0),
         "all_spawned": variable(mode, "bAllWavesSpawned", False),
-        "victory": variable(mode, "bVictory", False),
         "text": variable(mode, "WaveText", ""),
     }
     state["turret_text"] = variable(pawn, "TurretText", "")
+    state["phase"] = {
+        "night": variable(mode, "bIsNight", False),
+        "night_number": variable(mode, "NightNumber", 0),
+        "text": variable(mode, "PhaseText", ""),
+        "count_scale": variable(mode, "CountScale", 1.0),
+    }
+    state["resources"] = variable(mode, "Resources", 0)
+    state["pickups"] = [
+        vector(pickup.get_actor_location()) for pickup in actors_of(world, "BP_ResourcePickup")
+    ]
+    if lighthouses:
+        state["beam_on"] = variable(lighthouses[0], "bBeamOn", False)
+        beams = lighthouses[0].get_components_by_class(unreal.SpotLightComponent)
+        if beams:
+            state["beam_yaw"] = round(beams[0].get_world_rotation().yaw)
+    night = variable(mode, "Night")
+    state["night_data"] = night.get_name() if night else ""
+    suns = unreal.GameplayStatics.get_all_actors_of_class(world, unreal.DirectionalLight)
+    if suns:
+        state["sun_intensity"] = round(suns[0].get_component_by_class(unreal.LightComponent).intensity, 2)
     return state
 
 
