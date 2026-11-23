@@ -21,10 +21,10 @@ The command above is a wrapper. These are the calls it makes, for agents that ca
 | Mark the log | `SlateInspectorToolset.Snapshot`, `Click`, `Type` | Types `py print('<marker>')` into the editor's `Cmd` box, so later log reads can ignore everything before the marker. |
 | Start PIE | `EditorAppToolset.StartPIE` | `{"options": {"bSimulate": false, "playMode": "PlayMode_InViewPort", "warmupSeconds": 2.0}}`. Returns after BeginPlay and the warm-up. |
 | Act on the game | `SlateInspectorToolset.Type` into the `Cmd` box | While PIE runs, console commands go to the game. See "Driving the game". |
-| Read game state | `Type` into the `Cmd` box: `py "Tools/editor_python/pie_state.py"` (absolute path), then `LogsToolset.GetLogEntries` with pattern `PIESTATE` | The script prints one JSON line. |
+| Read game state | `Type` into the `Cmd` box: `py "<repo>/Tools/editor_python/pie_state.py"`, then `LogsToolset.GetLogEntries` with pattern `LogPython` | The script prints one JSON line that starts with `PIESTATE`; take the last one. |
 | Capture | `SlateInspectorToolset.Screenshot` on the viewport panel | `EditorAppToolset.CaptureViewport` renders the editor world even during PIE, so it cannot show the game. |
 | Stop PIE | `EditorAppToolset.StopPIE` | Always stop, even after a failure. |
-| Read the log | `LogsToolset.GetLogEntries` with `{"category": "", "pattern": "Error:\|Warning:", "maxEntries": 0}` | Keep only lines after the marker. The lines listed under "Expected log noise" in [unreal-mcp.md](unreal-mcp.md) are not failures. |
+| Read the log | `LogsToolset.GetLogEntries` with `{"category": "", "pattern": "", "maxEntries": 0}` | Read everything, drop the lines up to the marker, then keep lines containing `Error:` or `Warning:`. Filtering in the tool call would also filter out the marker. The lines listed under "Expected log noise" in [unreal-mcp.md](unreal-mcp.md) are not failures. |
 
 ## Driving the game
 

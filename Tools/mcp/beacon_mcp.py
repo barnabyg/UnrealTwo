@@ -213,7 +213,7 @@ class Client:
         raise ToolError("pie_state.py printed no PIESTATE line")
 
     def save_all(self) -> str:
-        """Save every unsaved map, actor and asset through Tools/editor_python/save_dirty.py.
+        """Save every unsaved Beacon map, actor and asset through Tools/editor_python/save_dirty.py.
 
         `AssetTools.save_assets` on a map skips changed actors unless the map
         package itself is dirty, so level edits are saved with this instead.
@@ -353,7 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
     logs = commands.add_parser("logs", help="print matching Output Log lines")
     logs.add_argument("pattern")
     logs.add_argument("--max", type=int, default=40)
-    commands.add_parser("save", help="save every unsaved map, actor and asset")
+    commands.add_parser("save", help="save every unsaved Beacon map, actor and asset")
     verify = commands.add_parser("verify", help="start PIE, capture, stop PIE, report log problems")
     verify.add_argument("--png", type=Path, required=True)
     verify.add_argument("--seconds", type=float, default=5.0)
