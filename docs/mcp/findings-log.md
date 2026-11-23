@@ -205,3 +205,30 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked
 - **Fallback used:** none
 - **Notes:** Once an AI controller existed, stopping PIE logged "LogCrowdFollowing: Warning: Unable to find RecastNavMesh instance while trying to create UCrowdManager instance". Beacon does not use crowd following, so `crowdManagerClass` in section `NavigationSystem` was set to null, which writes `CrowdManagerClass=None`.
+
+### F-021: Enhanced Input assets are authored as plain data assets
+
+- **Ticket:** #6
+- **Capability:** Enhanced Input
+- **Tool used:** `DataAssetTools.create`, `ObjectTools.get_properties`, `set_properties`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `DataAssetTools.create` with `/Script/EnhancedInput.InputAction` and `/Script/EnhancedInput.InputMappingContext` made `IA_Fire` and `IMC_Beacon`. In 5.8 a mapping context keeps its keys in `defaultKeyMappings.mappings`, not `mappings`; each entry is `{"action": {"refPath": ...}, "key": "LeftMouseButton", "triggers": [], "modifiers": []}`. Triggers and modifiers are instanced objects and were left empty, so the action fires every frame while held and the Fire function applies its own cooldown. Beacon's context is added by `BP_BeaconCharacter` a tick after BeginPlay, the way the template controller adds its own.
+
+### F-022: the graph DSL cannot write Enhanced Input action events
+
+- **Ticket:** #6
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.write_graph_dsl`, `create_node`, `get_node_infos`, `connect_pins`
+- **Outcome:** worked with a workaround
+- **Fallback used:** other MCP tool: `create_node` and `connect_pins`
+- **Notes:** `(event Input|EnhancedActionEvents|IA_Fire ...)` and `(event EnhancedInputActionIA_Fire ...)` both fail with "AddEvent|... does not exist", even when the node is already in the graph. `read_graph_dsl` prints these events with an empty body, because their exec outputs are named (Triggered, Started, Ongoing, Canceled, Completed) and are dropped. The event was made with `create_node` (type id `Input|EnhancedActionEvents|IA_Fire`), a `CallFunction|Fire` node was made the same way, and `connect_pins` joined the event's `Triggered` pin to it, using the `pin_id` values from `get_node_infos`. The logic itself lives in a function graph, which the DSL writes without trouble. To check which output of a multi-output node the DSL wired (for example `Collision|BreakHitResult`), read `connected_pins` from `get_node_infos`; the DSL read-back does not say.
+
+### F-023: properties set on an inherited component of a child Blueprint do not reach the game
+
+- **Ticket:** #6
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `ActorTools.get_components`, `ObjectTools.set_properties`
+- **Outcome:** failed
+- **Fallback used:** other MCP tool: a BeginPlay graph
+- **Notes:** `BP_BeaconCharacter` inherits its camera boom from the template character. `get_components` on the child's class default object returns the boom, and setting `socketOffset` on it returned true and read back correctly, but the camera did not move in PIE. Components a Blueprint adds itself (F-007) do keep their properties. The offset is now set in BeginPlay with `Class|SpringArmComponent|SetSocketOffset`.
