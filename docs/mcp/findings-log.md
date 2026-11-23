@@ -9,11 +9,11 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 ```markdown
 ### F-000: one-line summary
 
-- **Ticket:** #n
-- **Capability:** the feature area from the capability map
+- **Ticket:** #n (the ticket the finding belongs to; say in the notes if it was found during a later one)
+- **Capability:** the feature area from the capability map, or "agent workflow" for a finding about driving the MCP itself
 - **Tool used:** `Toolset.tool`, or "none" when no tool exists
 - **Outcome:** worked | worked with a workaround | failed | no tool
-- **Fallback used:** none | editor Python | C++ | manual step | other MCP tool (say which)
+- **Fallback used:** none | editor Python | C++ | manual step | other MCP tool (say which) | script client (`Tools/mcp/beacon_mcp.py`)
 - **Notes:** what a later ticket needs to know: exact arguments that mattered, error text, how the fallback was run
 ```
 
@@ -47,7 +47,7 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 ### F-003: there is no tool for console commands or editor Python
 
 - **Ticket:** #3
-- **Capability:** custom tools and fallbacks
+- **Capability:** agent workflow
 - **Tool used:** none directly; `SlateInspectorToolset.Snapshot`, `Click`, `Type`
 - **Outcome:** no tool
 - **Fallback used:** other MCP tool: type into the editor's `Cmd` box through the Slate inspector
@@ -68,7 +68,7 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Capability:** log reading, viewport screenshots
 - **Tool used:** `describe_toolset`, `SceneTools.find_actors`, `EditorAppToolset.CaptureViewport`
 - **Outcome:** worked with a workaround
-- **Fallback used:** other: a script client that speaks MCP over HTTP
+- **Fallback used:** script client (`Tools/mcp/beacon_mcp.py`)
 - **Notes:** `describe_toolset` for `BlueprintTools` is 72,000 characters, and `find_actors` with no filter lists every actor in the level. Images come back as base64 inside the JSON result. `Tools/mcp/beacon_mcp.py` calls the same `call_tool` endpoint and can print compact signatures (`describe`), save a capture to a PNG (`call ... --png`), and filter log lines (`logs`).
 
 ### F-006: the island level is built from primitives and material instances
@@ -154,12 +154,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 
 ### F-015: save_assets on a map skips changed actors unless the map file is dirty
 
-- **Ticket:** #4, found during #5
+- **Ticket:** #4
 - **Capability:** level and actor editing
 - **Tool used:** `AssetTools.save_assets`, `SceneTools.save_actor`
 - **Outcome:** failed
 - **Fallback used:** editor Python: `Tools/editor_python/save_dirty.py`, run with `beacon_mcp.py save`
-- **Notes:** This corrects F-010. In a level that stores one file per actor, `save_assets` on the map saved the actor files only while the map package itself was dirty (in #4, right after a WorldSettings change). Later actor edits left the map package clean; `save_assets` then returned true and wrote nothing, and `is_dirty` on the map said false, while 54 actor packages were unsaved. The boundary wall swap and the seabed fix from #4 were committed unsaved for that reason. `save_assets` and `save_actor` on the actor packages both fail with "Asset does not exist". The script calls `EditorLoadingAndSavingUtils.save_dirty_packages` and reports the unsaved count before and after. Check `git status` after saving a level.
+- **Notes:** Found during #5. This corrects F-010. In a level that stores one file per actor, `save_assets` on the map saved the actor files only while the map package itself was dirty (in #4, right after a WorldSettings change). Later actor edits left the map package clean; `save_assets` then returned true and wrote nothing, and `is_dirty` on the map said false, while 54 actor packages were unsaved. The boundary wall swap and the seabed fix from #4 were committed unsaved for that reason. `save_assets` and `save_actor` on the actor packages both fail with "Asset does not exist". The script calls `EditorLoadingAndSavingUtils.save_dirty_packages` and reports the unsaved count before and after. Check `git status` after saving a level.
 
 ### F-016: the NavMesh is set up with generic scene and settings tools
 
@@ -301,7 +301,7 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Ticket:** #9
 - **Capability:** Behaviour Tree or StateTree, DataTables and DataAssets
 - **Tool used:** `DataAssetTools.create`, `ObjectTools.set_properties`, `BlueprintTools.write_graph_dsl`; editor Python for the tree
-- **Outcome:** worked
+- **Outcome:** worked with a workaround
 - **Fallback used:** editor Python: `Tools/editor_python/build_creature_ai.py`
 - **Notes:** A Runner and a Hunter are two more `BP_CreatureType` data assets; one `BP_Creature` class takes speed, health, scale, colour and tree from the asset. The Hunter's tree is a Selector over two plans, "hunt turret" then "attack lighthouse", so it falls back when no turret stands or its turret dies. The build script makes both trees from a table of plans. Measured in PIE: the Hunter closed on the island at about 159 cm/s and the Shambler at about 257 cm/s; the Hunter walked to a turret on the far side from where it landed, took it from 60 health to destroyed, then went for the lighthouse. Creatures for a test are spawned by calling the game mode's `SpawnCreature` from editor Python with `call_method`. Rebuilding a tree leaves any editor graph from an earlier look at the asset out of date; delete the asset first if its structure changes.
 
