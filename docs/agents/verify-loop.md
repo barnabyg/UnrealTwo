@@ -61,4 +61,5 @@ Screenshots go under `Saved/BeaconScreenshots/`, which Git ignores. Attach them 
 - Click the `Cmd` box before typing. `Type` on an unfocused box returns false and does nothing.
 - A floating editor window, such as the Message Log, takes focus and makes `Type` fail. Close it with `SlateInspectorToolset.Windows`.
 - `CaptureViewport` needs `captureTransform` and `annotations` even though its schema marks them optional.
-- Save the level before starting PIE if the change must survive an editor restart. PIE runs unsaved changes, so a passing run does not prove the level was saved.
+- PIE runs unsaved changes, so a passing run does not prove anything was saved. After editing a level, run `python Tools/mcp/beacon_mcp.py save` and check `git status`. `AssetTools.save_assets` on the map returns true but skips changed actors unless the map file itself changed (finding F-015).
+- The editor drops to about 3 frames a second while its window is in the background. Game time still advances correctly, so compare the `time` field of `pie_state` rather than wall-clock time.

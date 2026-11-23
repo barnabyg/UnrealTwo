@@ -151,3 +151,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** other MCP tool: `SlateInspectorToolset.Screenshot` on the viewport panel
 - **Notes:** `CaptureViewport` fails without `captureTransform` and without `annotations` ("input param ... needs a default value"), although the schema marks both optional. With both supplied during PIE it renders the editor world from the game camera's position: the player is missing, and editor-only icons and hidden-in-game actors are drawn. `Screenshot` on the viewport's splitter panel returns the pixels on screen, which is the game.
+
+### F-015: save_assets on a map skips changed actors unless the map file is dirty
+
+- **Ticket:** #4, found during #5
+- **Capability:** level and actor editing
+- **Tool used:** `AssetTools.save_assets`, `SceneTools.save_actor`
+- **Outcome:** failed
+- **Fallback used:** editor Python: `Tools/editor_python/save_dirty.py`, run with `beacon_mcp.py save`
+- **Notes:** This corrects F-010. In a level that stores one file per actor, `save_assets` on the map saved the actor files only while the map package itself was dirty (in #4, right after a WorldSettings change). Later actor edits left the map package clean; `save_assets` then returned true and wrote nothing, and `is_dirty` on the map said false, while 54 actor packages were unsaved. The boundary wall swap and the seabed fix from #4 were committed unsaved for that reason. `save_assets` and `save_actor` on the actor packages both fail with "Asset does not exist". The script calls `EditorLoadingAndSavingUtils.save_dirty_packages` and reports the unsaved count before and after. Check `git status` after saving a level.

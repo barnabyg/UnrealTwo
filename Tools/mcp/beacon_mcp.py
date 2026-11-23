@@ -12,6 +12,7 @@ Usage (run from the repo root, editor running):
   python Tools/mcp/beacon_mcp.py console "<console command>"
   python Tools/mcp/beacon_mcp.py py <script.py>
   python Tools/mcp/beacon_mcp.py logs "<regex>" [--max 40]
+  python Tools/mcp/beacon_mcp.py save
   python Tools/mcp/beacon_mcp.py verify --png out.png [--seconds 5]
 """
 
@@ -235,6 +236,21 @@ class Client:
                 return state
         raise ToolError("pie_state.py printed no PIESTATE line")
 
+    def save_all(self) -> str:
+        """Save every unsaved map, actor and asset through Tools/editor_python/save_dirty.py.
+
+        `AssetTools.save_assets` on a map skips changed actors unless the map
+        package itself is dirty, so level edits are saved with this instead.
+        """
+        script = Path(__file__).resolve().parents[1] / "editor_python" / "save_dirty.py"
+        for line in reversed(self.run_python(script, 2.0)):
+            if "SAVEDIRTY " in line:
+                summary = line.split("SAVEDIRTY ", 1)[1]
+                if not summary.endswith("after=0"):
+                    raise ToolError(f"packages are still unsaved: {summary}")
+                return summary
+        raise ToolError("save_dirty.py printed no SAVEDIRTY line")
+
     def start_pie(self, warmup_seconds: float = 2.0) -> None:
         options = {"bSimulate": False, "playMode": "PlayMode_InViewPort", "warmupSeconds": warmup_seconds}
         self.call(APP, "StartPIE", {"options": options})
@@ -348,6 +364,7 @@ def build_parser() -> argparse.ArgumentParser:
     logs = commands.add_parser("logs", help="print matching Output Log lines")
     logs.add_argument("pattern")
     logs.add_argument("--max", type=int, default=40)
+    commands.add_parser("save", help="save every unsaved map, actor and asset")
     verify = commands.add_parser("verify", help="start PIE, capture, stop PIE, report log problems")
     verify.add_argument("--png", type=Path, required=True)
     verify.add_argument("--seconds", type=float, default=5.0)
@@ -386,6 +403,8 @@ def main(argv: list[str]) -> int:
     elif args.command == "logs":
         for line in client.logs(args.pattern, args.max):
             print(line)
+    elif args.command == "save":
+        print(client.save_all())
     elif args.command == "verify":
         problems = client.verify(args.png, args.seconds)
         for line in problems:
