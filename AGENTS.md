@@ -15,3 +15,11 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Unreal MCP
+
+How to launch the editor and connect: `docs/agents/unreal-mcp.md`. Before building anything, read `docs/mcp/capability-map.md` for which toolset covers what, and `docs/mcp/tool-inventory.md` for every tool the server reports. Append what happened to `docs/mcp/findings-log.md`, using its entry format.
+
+### Verification
+
+One command checks the repo's tooling: `pwsh Tools/verify.ps1`. See `docs/agents/verification.md`.
