@@ -50,7 +50,7 @@ For each Beacon feature area: which toolset covers it, or the fallback when noth
 
 ## Where building Beacon changed the picture
 
-The map above was written before anything was built. These are the places where tickets #4 to #10 proved it wrong or incomplete; the finding has the detail.
+The map above was written before anything was built. These are the places where tickets #4 to #15 proved it wrong or incomplete; the finding has the detail.
 
 | Feature area | What turned out | Finding |
 |---|---|---|
@@ -61,5 +61,12 @@ The map above was written before anything was built. These are the places where 
 | Behaviour Tree | Editor Python can build a whole tree; the MCP's inspect tools then confirm it. | F-017 |
 | EQS | No scripted route to author a query. A person makes it in the EQS editor; editor Python can then put a Run EQS Query task in a tree, and `ObjectTools` can read the query's settings back. | F-030, F-034 |
 | DataTables and DataAssets | Data assets with Blueprint-defined classes cover the need; DataTables stay out of reach without a row struct. | F-028 |
-| UMG | Covered, including layout and fonts through `ObjectTools`. | F-019 |
-| PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. | F-013, F-014, F-027 |
+| UMG | Covered, including layout and fonts through `ObjectTools`, button click events and widgets made at run time. | F-019, F-035 |
+| PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. The Slate inspector reads and clicks the game's own widgets. Frame rate and short timings come from editor Python. | F-013, F-014, F-027, F-037, F-045, F-051 |
+| Materials | Covered. Reparenting a material instance does not mark it unsaved, so it needs a forced save. | F-041 |
+| Niagara | Covered for systems made from an engine template: emitters and modules are removed and stack inputs set. Results are too large to read without the script client. | F-042 |
+| Audio | No tool, as planned. Sounds are synthesised by a script and imported with editor Python. Nothing can confirm that they are heard. | F-043 |
+| PCG | Covered for the graph. The mesh lists of a spawner are set with `ObjectTools`, and the generated instances are read back with editor Python. | F-046, F-047 |
+| Sequencer | Covered. Binding a camera also adds a Camera Cut track that nothing reports. | F-048, F-049 |
+| SaveGame | Covered as ordinary Blueprint work. Blueprint cannot guard against a file that is not a save, which crashes the engine on load. | F-052, F-053 |
+| Agent workflow | `set_properties` takes a JSON string. A crashed editor restarts on a dialog that keeps the MCP server down. | F-036, F-054 |
