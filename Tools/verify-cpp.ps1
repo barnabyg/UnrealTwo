@@ -1,0 +1,77 @@
+#!/usr/bin/env pwsh
+# The C++ gates of Tools/verify.ps1: format, build and tests for the modules under Source/.
+# They need Unreal Engine 5.8 and Visual Studio, so verify.ps1 runs them only where the
+# engine is installed. Usage (repo root): pwsh Tools/verify-cpp.ps1 -Engine <engine root>
+param([Parameter(Mandatory)][string]$Engine)
+
+$ErrorActionPreference = 'Stop'
+$repo = Split-Path $PSScriptRoot -Parent
+Set-Location $repo
+$project = Join-Path $repo 'Beacon.uproject'
+$logs = Join-Path $repo 'Saved/Logs'
+New-Item -ItemType Directory -Force $logs | Out-Null
+
+function Find-ClangFormat {
+    $onPath = Get-Command clang-format -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+    if (Test-Path $vswhere) {
+        $install = & $vswhere -latest -products * -property installationPath
+        $bundled = Join-Path $install 'VC/Tools/Llvm/x64/bin/clang-format.exe'
+        if (Test-Path $bundled) { return $bundled }
+    }
+    throw 'clang-format not found: put it on PATH or add "C++ Clang tools for Windows" to Visual Studio'
+}
+
+Write-Host '== format (C++)'
+$sources = Get-ChildItem (Join-Path $repo 'Source') -Recurse -File -Include *.cpp, *.h, *.cs
+& (Find-ClangFormat) --dry-run --Werror @($sources.FullName)
+if ($LASTEXITCODE -ne 0) { throw 'format (C++) failed' }
+
+# The compiler's output goes to a file. A warning in Beacon's own source fails the gate.
+# Warnings in engine headers are not ours to fix; docs/agents/verification.md says which
+# are expected and why.
+Write-Host '== build (C++)'
+$buildLog = Join-Path $logs 'verify-build.log'
+& (Join-Path $Engine 'Engine/Build/BatchFiles/Build.bat') BeaconEditor Win64 Development `
+    "-Project=$project" -WaitMutex -NoHotReloadFromIDE *> $buildLog
+if ($LASTEXITCODE -ne 0) {
+    Get-Content $buildLog -Tail 40 | Write-Host
+    throw "build (C++) failed: see $buildLog. The editor must be closed if the build has to relink."
+}
+$ownWarnings = @(Select-String -Path $buildLog -SimpleMatch -Pattern (Join-Path $repo 'Source') |
+        Where-Object { $_.Line -match '\bwarning\b' })
+if ($ownWarnings) {
+    $ownWarnings | ForEach-Object { Write-Host $_.Line }
+    throw "build (C++) failed: $($ownWarnings.Count) warning(s) in Beacon's source"
+}
+
+# A second, windowless editor runs the tests, so this works while the editor is open.
+# It gets its own MCP port because the open editor holds the usual one.
+Write-Host '== tests (C++)'
+$report = Join-Path $repo 'Saved/Automation/verify'
+if (Test-Path $report) { Remove-Item -Recurse -Force $report }
+$editorArguments = @(
+    "`"$project`"",
+    '-ExecCmds="Automation RunTests StartsWith:Beacon.; Quit"',
+    '-unattended', '-nopause', '-nosplash', '-nullrhi', '-nosound',
+    '-ModelContextProtocolPort=8017',
+    "-ReportExportPath=`"$report`"",
+    "-abslog=`"$(Join-Path $logs 'verify-tests.log')`""
+)
+$editor = Start-Process (Join-Path $Engine 'Engine/Binaries/Win64/UnrealEditor-Cmd.exe') `
+    -ArgumentList $editorArguments -PassThru -WindowStyle Hidden
+# Ten minutes is several times what a start-up and the tests take.
+if (-not $editor.WaitForExit(600000)) {
+    $editor.Kill($true)
+    throw 'tests (C++) failed: the editor did not finish within ten minutes'
+}
+$index = Join-Path $report 'index.json'
+if (-not (Test-Path $index)) { throw "tests (C++) failed: no report was written. See $logs/verify-tests.log" }
+$results = Get-Content $index -Raw | ConvertFrom-Json
+$notClean = $results.tests | Where-Object { $_.state -ne 'Success' -or $_.warnings -ne 0 -or $_.errors -ne 0 }
+$notClean | ForEach-Object { Write-Host "$($_.state): $($_.fullTestPath)" }
+if ($results.succeeded -eq 0 -or $notClean -or $results.notRun -ne 0) {
+    throw "tests (C++) failed: $($results.failed) failed, $($results.succeededWithWarnings) passed with warnings, $($results.notRun) not run"
+}
+Write-Host "$($results.succeeded) passed"

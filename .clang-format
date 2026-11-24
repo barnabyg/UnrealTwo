@@ -1,0 +1,47 @@
+# C++ and C# style for Beacon's own source under Source/. It follows Epic's
+# coding standard where clang-format can express it: tabs, Allman braces,
+# pointers and references bound to the type.
+---
+Language: Cpp
+BasedOnStyle: Microsoft
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 140
+AccessModifierOffset: -4
+NamespaceIndentation: All
+PointerAlignment: Left
+AlignAfterOpenBracket: AlwaysBreak
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: Inline
+AllowShortBlocksOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: Never
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+LambdaBodyIndentation: OuterScope
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+StatementMacros:
+  - UCLASS
+  - UENUM
+  - UFUNCTION
+  - UPROPERTY
+  - USTRUCT
+  - GENERATED_BODY
+  - BEGIN_DEFINE_SPEC
+  - END_DEFINE_SPEC
+  - IMPLEMENT_MODULE
+  - IMPLEMENT_PRIMARY_GAME_MODULE
+---
+Language: CSharp
+BasedOnStyle: Microsoft
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ColumnLimit: 140
+...

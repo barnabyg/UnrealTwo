@@ -1,5 +1,6 @@
 #!/usr/bin/env pwsh
-# Canonical, non-mutating verification for the repo's Python tooling.
+# Canonical, non-mutating verification: the Python tooling everywhere, and the C++ modules
+# where Unreal Engine is installed.
 # Usage (repo root): pwsh Tools/verify.ps1
 # Gates that do not apply are listed in docs/agents/verification.md.
 $ErrorActionPreference = 'Stop'
@@ -22,4 +23,13 @@ Invoke-Gate 'types' { uv run --no-sync mypy }
 [string[]]$failFast = @()
 if ($env:CI) { $failFast = @('--maxfail=1') }
 Invoke-Gate 'tests' { uv run --no-sync pytest @failFast }
+
+# The C++ gates need the engine and its compiler, which a hosted CI runner does not have.
+$engine = if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:/Program Files/Epic Games/UE_5.8' }
+if (Test-Path (Join-Path $engine 'Engine/Build/BatchFiles/Build.bat')) {
+    & (Join-Path $PSScriptRoot 'verify-cpp.ps1') -Engine $engine
+}
+else {
+    Write-Host "== C++ gates skipped: no Unreal Engine at $engine (see docs/agents/verification.md)"
+}
 Write-Host 'verify: all gates passed'
