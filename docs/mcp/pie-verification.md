@@ -1,6 +1,6 @@
 # Play-in-editor verification record
 
-What the agent measured in play-in-editor (PIE) for each acceptance criterion of tickets #4 to #15, on 2026-11-23 and 2026-11-24. Every run was started, driven, read and stopped through the MCP as described in [verify-loop.md](../agents/verify-loop.md). Positions are in centimetres; the lighthouse stands at the origin. Game state was read with `Tools/editor_python/pie_state.py`.
+What the agent measured in play-in-editor (PIE) for each acceptance criterion of tickets #4 to #17, on 2026-11-23 and 2026-11-24. Every run was started, driven, read and stopped through the MCP as described in [verify-loop.md](../agents/verify-loop.md). Positions are in centimetres; the lighthouse stands at the origin. Game state was read with `Tools/editor_python/pie_state.py`.
 
 **Clean log.** Each final run below ended with no `Warning:` or `Error:` line added to the Output Log between the start marker and the stop, apart from the expected noise listed in [unreal-mcp.md](../agents/unreal-mcp.md), and apart from the bad save files of #15, where the row says what was logged. A plain `beacon_mcp.py verify` run passed on the final tree, three times in a row (see the last section).
 
@@ -129,9 +129,49 @@ Stopping PIE and starting it again stands for quitting and relaunching. The save
 | Missing or unreadable save falls back to a new game | No file: the menu offers only "Play". An empty file, a save cut to half its length, a file of zeros and a save with version 99: Continue started day 1 with 60 resources and no turrets and showed "The saved game could not be read. Starting a new game."; the day's autosave then replaced the file. The cut and zeroed files each logged one engine warning. **Not met for one case:** a file of plain text crashed the engine inside `LoadGameFromSlot` (finding F-053). The project owner accepted this gap on 2026-11-24 rather than add C++ or change the save format. |
 | The format carries a version number | `SaveVersion` is 1 in every file the game wrote. A file written as version 99 was refused by a game whose current version is 1. |
 
-## Re-checks on the final tree
+## #16 Custom `SimulateWave` MCP tool
 
-Run after all five tickets, the review fixes and the removal of the unreachable graph nodes (finding F-055).
+Measured on 2026-11-24 on the final build. The tool was called through `call_tool` on `BeaconEditor.BeaconBalanceToolset`. "Two-turret layout" means a Sentry at (600, 0) and a Sniper at (-600, 0).
+
+| Criterion | Evidence |
+|---|---|
+| Builds with a C++ module, Blueprint content still works | `Build.bat BeaconEditor Win64 Development` succeeded with no warning in the project's source, and the editor loaded both modules. `pwsh Tools/verify.ps1` passed, including the 32 C++ tests. After it: `beacon_mcp.py verify` exit 0 with no log problems (menu, new game, intro skip, play). A night the player started with N, with six turrets, was won; the game went on to day 2 with 80 resources and eight pickups, and the save file was rewritten at the start of that day. |
+| `SimulateWave` appears after a restart and tool refresh | After one editor restart `list_toolsets` has `BeaconEditor.BeaconBalanceToolset` and `describe_toolset` shows `SimulateWave` with a schema for its arguments and result. The regenerated inventory counts 53 toolsets and 831 tools, one more of each. No refresh command was needed. |
+| Returns structured balance figures | Night 1, two-turret layout: 18 creatures with 1230 health in waves of 150, 210 and 870; 20 trials; predicted outcome Loss with a 10% chance of a win; turrets remove 1033.5 health out of a capacity of 2477.8; 16.1 kills; 61.9 s; 1.85 turrets lost. Per turret: Sentry 20 damage a second, 335 dealt, 33.5 shots, destroyed in 95% of trials; Sniper 20 a second, 698.5 dealt, 24.1 shots, destroyed in 90%. |
+| Figures change when the data changes | `Count` on `DA_Wave_N1_1` from 3 to 6 with `ObjectTools.set_properties`: 21 creatures, 1380 health, first wave 300. `Damage` on `DA_Turret_Sentry` from 10 to 20: Sentry 40 damage a second, chance of a win 100%. Each was set back and the first figures returned. Neither change was saved. |
+| Invalid input returns a clear error | Night 0: "Unknown night 0: the night must be between 1 and 50. Nights 1 to 3 have their own data; later nights replay night 3 with more creatures." Night 51: the same for 51. Type "Laser": "Unknown turret type "Laser" (turret 1 of the layout). The game's turret types are: Sentry, Sniper, Sprayer." A turret sent without a position, and one at (3000, 0): "Turret 1 of the layout, at (0, 0), is not on buildable ground. The lighthouse is at (0, 0) and a turret stands between 350 and 2800 cm from it." 33 turrets: "Too many turrets: the layout has 33 and the most allowed is 32." The next valid call answered normally after all six. The largest valid request, night 50 with 32 turrets (981 creatures), took half a second. |
+| Steps for adding a custom tool are documented | "Adding a custom tool" in [unreal-mcp.md](../agents/unreal-mcp.md). |
+| Fallbacks and failures recorded | Findings F-057 to F-060, and F-064. |
+
+### The prediction against the game
+
+Not an acceptance criterion, but it says how far to trust the tool. Each real night was played by the automated playtest of #17 with the background throttle off.
+
+| Night and layout | `SimulateWave` | Played |
+|---|---|---|
+| Night 1, no turrets | Loss at 19.4 s | Loss at 19.5 s |
+| Night 1, two-turret layout | Loss, 10% chance of a win, 16.1 kills, 62 s, 1.85 turrets lost | Four nights, four losses: 17, 17, 16 and 14 kills of 18; 73.7, 73.8, 64.7 and 57.4 s; both turrets destroyed each time |
+| Night 3, four turrets at 700 cm (Sentry east and west, Sniper north and south) | Loss, no chance of a win, 28.2 kills of 40, 59 s, 3.6 turrets lost | Loss, 25 kills, 54.7 s, three turrets destroyed |
+| Night 3, six turrets at 700 cm, Sentry and Sniper alternating | Win in every trial, lighthouse at 100, 63 s | Two nights, two wins: lighthouse at 100, 40 kills, 64.3 and 62.8 s, no turret lost |
+
+## #17 Automated night playtest
+
+Measured on 2026-11-24 with `Tools/mcp/night_playtest.py`, whose every step is an MCP tool call. The run reported here is night 3 with six turrets at 700 cm from the lighthouse, Sentry and Sniper alternating, on the final tree.
+
+| Criterion | Evidence |
+|---|---|
+| A night starts at a chosen number with a preset layout and no player input | `start` typed `open Lvl_Island?AutoNight=3?Layout=Sentry,700,0,Sniper,350,606,Sentry,-350,606,Sniper,-700,0,Sentry,-350,-606,Sniper,350,-606` into the console during PIE. The game state then read: `auto_run` true, night 3, a Sentry or Sniper at each of the six positions, and the player at (-1500, 0), where it stayed. No key or button was pressed. |
+| The game writes a structured result to the log | `LogBlueprintUserMessages: BEACON_NIGHT_RESULT night=3 outcome=win lighthouse_health=100.0 lighthouse_max_health=100.0 kills=40 spawned=40 duration_seconds=62.841602 turrets_placed=6 turrets_standing=6`. A lost night: `night=3 outcome=loss lighthouse_health=0.0 ... kills=25 spawned=40 duration_seconds=54.729709 turrets_placed=4 turrets_standing=1`. A night the player starts writes the line too. |
+| Start, poll and stop are entirely through the MCP | `start` (`StartPIE`, then the console through the Slate inspector) returned in 5 s. `poll` (`GetLogEntries`, `IsPIERunning`, a Slate screenshot) exited 3 three times, about 17 s apart, and 0 the fourth time with the result; each poll took about a second. `stop` (`StopPIE`) exited 0; afterwards `IsPIERunning` was false, the background throttle setting was back to true and the run's record was gone. A second `start` during the run was refused. |
+| The report gives outcome, lighthouse health, kills and duration, with a mid-run screenshot | Report: win, lighthouse 100 of 100, 40 kills of 40 spawned, 62.8 s, six turrets placed and standing, three screenshots, no problems, no log problems. The third screenshot shows the HUD at "Night 3", "Wave 3 / 3 - creatures left: 5", five of the turrets and three creatures on the plateau. The fourth poll took no picture, because the night was over. |
+| One repeatable recipe | [night-playtest.md](../agents/night-playtest.md). The four-turret night of the table above was played with the single `run` command from the same page. |
+| Fallbacks and failures recorded | Findings F-061 to F-063. |
+
+Two more checks. A layout naming a type the game does not have, `Laser,600,0;Sentry,700,0` on night 1, placed one turret; the report listed "the layout has 2 turrets but the game placed 1" and the command exited 1. And an automated night leaves the save alone: the save file's modified time was the same before and after the run, because the game saves at the start of a day and an automated night does not start one.
+
+## Re-checks on the final tree of #11 to #15
+
+Run after tickets #11 to #15, their review fixes and the removal of the unreachable graph nodes (finding F-055).
 
 | Check | Evidence |
 |---|---|

@@ -8,7 +8,7 @@ For each Beacon feature area: which toolset covers it, or the fallback when noth
 
 1. **Another MCP tool.** Generic tools reach a long way: `ObjectTools.set_properties` edits any editable property, `DataAssetTools.create` makes any `UDataAsset` subclass, and `BlueprintTools.write_graph_dsl` can call most gameplay functions.
 2. **Editor Python**, run through the MCP by typing `py "<script>"` into the editor's console box with the Slate inspector (finding F-003). Scripts live in `Tools/editor_python/`.
-3. **C++**, which needs a compiler, a project module and an editor restart. Beacon is a Blueprint-only project, so this is a last resort.
+3. **C++**, which needs a compiler, a build with the editor closed and an editor restart. The game is Blueprint only, so this is a last resort. Since #16 the project has an editor module for its own MCP tools, which is where such code goes.
 4. **A manual step** by a person in the editor.
 
 ## Map
@@ -69,6 +69,6 @@ The map above was written before anything was built. These are the places where 
 | PCG | Covered for the graph. The mesh lists of a spawner are set with `ObjectTools`, and the generated instances are read back with editor Python. | F-046, F-047 |
 | Sequencer | Covered. Binding a camera also adds a Camera Cut track that nothing reports. | F-048, F-049 |
 | SaveGame | Partly covered, as planned: ordinary Blueprint work. Blueprint cannot guard against a file that is not a save, which crashes the engine on load. | F-052, F-053 |
-| Custom C++ tools | Not covered up to the restart, covered after it. No tool scaffolds a project module or compiles one; the code is written and built from a shell and the editor restarted. The function is then a tool like any built-in one, with a schema taken from its comments, and the automation toolset runs its tests. The plugin scaffolding tool was not used. | F-057, F-058, F-059, F-060 |
+| Custom C++ tools | Not covered up to the restart, covered after it. No tool scaffolds a project module or compiles one; the code is written and built from a shell and the editor restarted. The function is then a tool like any built-in one, with a schema taken from its comments, and the automation toolset runs its tests. `AssetTools.write_file` cannot write source: it refuses any path outside `Content/` and `Saved/`. The plugin scaffolding tool was not used. | F-057, F-058, F-059, F-060 |
 
-Four findings are about driving the MCP and belong to no feature area: `set_properties` takes its values as a JSON string (F-036), a Blueprint variable cannot be set from editor Python during PIE (F-040), a crashed editor restarts on a dialog that keeps the MCP server down (F-054), and saving after reading graphs rewrites Blueprints that were only read (F-063).
+Five findings are about driving the MCP and belong to no feature area: `set_properties` takes its values as a JSON string (F-036), a Blueprint variable cannot be set from editor Python during PIE (F-040), a crashed editor restarts on a dialog that keeps the MCP server down (F-054), saving after reading graphs rewrites Blueprints that were only read (F-063), and reloading an unsaved package from editor Python opens a dialog that stops the server (F-064).
