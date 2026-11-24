@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = []
 
 [dependency-groups]
-dev = ["mypy", "pytest", "pytest-xdist", "ruff"]
+dev = ["clang-format", "mypy", "pytest", "pytest-xdist", "ruff"]
 
 [tool.uv]
 package = false

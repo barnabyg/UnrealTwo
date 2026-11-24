@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
-# Canonical, non-mutating verification: the Python tooling everywhere, and the C++ modules
-# where Unreal Engine is installed.
+# Canonical, non-mutating verification: the Python tooling and the C++ formatting everywhere,
+# and the C++ build and tests where Unreal Engine is installed.
 # Usage (repo root): pwsh Tools/verify.ps1
 # Gates that do not apply are listed in docs/agents/verification.md.
 $ErrorActionPreference = 'Stop'
@@ -23,8 +23,11 @@ Invoke-Gate 'types' { uv run --no-sync mypy }
 [string[]]$failFast = @()
 if ($env:CI) { $failFast = @('--maxfail=1') }
 Invoke-Gate 'tests' { uv run --no-sync pytest @failFast }
+# clang-format comes from uv.lock, so every machine formats with the same version.
+$cppSources = @(Get-ChildItem Source -Recurse -File -Include *.cpp, *.h, *.cs | ForEach-Object FullName)
+Invoke-Gate 'format (C++)' { uv run --no-sync clang-format --dry-run --Werror @cppSources }
 
-# The C++ gates need the engine and its compiler, which a hosted CI runner does not have.
+# The other C++ gates need the engine and its compiler, which a hosted CI runner does not have.
 $engine = if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:/Program Files/Epic Games/UE_5.8' }
 # The path is put together as text: on Linux, Join-Path stops on a path whose drive does not exist.
 if (Test-Path -LiteralPath "$engine/Engine/Build/BatchFiles/Build.bat") {
@@ -32,6 +35,6 @@ if (Test-Path -LiteralPath "$engine/Engine/Build/BatchFiles/Build.bat") {
     Write-Host 'verify: all gates passed'
 }
 else {
-    Write-Host "== C++ gates skipped: no Unreal Engine at $engine (see docs/agents/verification.md)"
-    Write-Host 'verify: the Python gates passed; the C++ gates did not run'
+    Write-Host "== C++ build and tests skipped: no Unreal Engine at $engine (see docs/agents/verification.md)"
+    Write-Host 'verify: the gates that ran passed; the C++ build and tests did not run'
 }

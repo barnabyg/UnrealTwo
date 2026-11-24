@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
-# The C++ gates of Tools/verify.ps1: format, build and tests for the modules under Source/.
-# They need Unreal Engine 5.8 and Visual Studio, so verify.ps1 runs them only where the
-# engine is installed. Usage (repo root): pwsh Tools/verify-cpp.ps1 -Engine <engine root>
+# The C++ gates of Tools/verify.ps1 that need Unreal Engine 5.8 and Visual Studio: the build
+# and the tests of the modules under Source/. verify.ps1 runs them only where the engine is
+# installed. Usage (repo root): pwsh Tools/verify-cpp.ps1 -Engine <engine root>
 param([Parameter(Mandatory)][string]$Engine)
 
 $ErrorActionPreference = 'Stop'
@@ -10,25 +10,6 @@ Set-Location $repo
 $project = Join-Path $repo 'Beacon.uproject'
 $logs = Join-Path $repo 'Saved/Logs'
 New-Item -ItemType Directory -Force $logs | Out-Null
-
-function Find-ClangFormat {
-    $onPath = Get-Command clang-format -ErrorAction SilentlyContinue
-    if ($onPath) { return $onPath.Source }
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-    if (Test-Path $vswhere) {
-        $install = & $vswhere -latest -products * -property installationPath
-        if ($install) {
-            $bundled = Join-Path $install 'VC/Tools/Llvm/x64/bin/clang-format.exe'
-            if (Test-Path $bundled) { return $bundled }
-        }
-    }
-    throw 'clang-format not found: put it on PATH or add "C++ Clang tools for Windows" to Visual Studio'
-}
-
-Write-Host '== format (C++)'
-$sources = Get-ChildItem (Join-Path $repo 'Source') -Recurse -File -Include *.cpp, *.h, *.cs
-& (Find-ClangFormat) --dry-run --Werror @($sources.FullName)
-if ($LASTEXITCODE -ne 0) { throw 'format (C++) failed' }
 
 # Runs Unreal Build Tool on the editor target with its output sent to a file. Any warning in
 # it fails the gate, apart from the two that docs/agents/verification.md documents: C4996

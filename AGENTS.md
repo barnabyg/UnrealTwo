@@ -26,7 +26,7 @@ The game is Blueprint. `Source/BeaconEditor` is an editor-only C++ module that a
 
 ### Verification
 
-One command checks the repo's tooling and C++: `pwsh Tools/verify.ps1`. CI cannot run the C++ gates, so run it locally before pushing a change under `Source/`. See `docs/agents/verification.md`.
+One command checks the repo's tooling and C++: `pwsh Tools/verify.ps1`. CI checks the C++ formatting but cannot build or test it, so run the command locally before pushing a change under `Source/`. See `docs/agents/verification.md`.
 
 ### Checking game changes
 
