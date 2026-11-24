@@ -94,3 +94,14 @@ Buttons were pressed with `SlateInspectorToolset.Click` on the game's own widget
 | Creature deaths show a Niagara burst | `NS_DeathBurst` appeared in the component list on the sample where the creature's health reached 0, and the capture shows the burst where it stood. |
 | Sounds, or a finding | Three generated sounds are imported as `SFX_Shot`, `SFX_Hit` and `SFX_Death` and played from the shot, damage and death graphs (finding F-043). The agent cannot hear them; the log is clean while they play. |
 | Effects clean up, frame rate holds through a wave | Five turrets, the player firing throughout, night one played to the end. Frames per second over six-second samples: 115 by day with no combat, then 115, 115, 115, 114, 115, 115 through waves one to three. Live Niagara components peaked at 10 during wave three and were 0 four seconds after the night ended. Measured with the editor's background throttle off (finding F-045). |
+
+## #13 PCG scatter
+
+Instance positions were read with `Tools/editor_python/scatter_state.py`. The plateau is a disc of radius 2800 with its top at z = 0; the beach and the sea lie below it.
+
+| Criterion | Evidence |
+|---|---|
+| A PCG graph places rock and foliage placeholders | `PCG_IslandScatter` on the `IslandScatter` volume, seed 42: 6 cube rocks, 10 sphere rocks and 69 cone bushes. The overview screenshot shows them across the plateau. |
+| Nothing in the sea, in the lighthouse or blocking the route | Every instance is on the plateau top (rocks at z = 0, foliage at z = 25) between 721 and 2591 cm from the lighthouse, which has a radius of 350. None is on the path from the west shore: over eight seeds the nearest rock centre was 530 cm from the path's centre line (half-width 200). In PIE, path queries from twelve points round the shore to the lighthouse were all valid and complete, 2720 to 2893 cm against 2720 straight, and with no turrets the creatures of night one took the lighthouse from 100 to 60. |
+| A new seed changes the layout | Seed 42 twice: the same sixteen rock positions. Seed 7: sixteen rocks, none at a seed 42 position. Seeds 1 to 6 gave 14 to 18 rocks. |
+| Player can walk the island, rocks have collision | Holding W from the start for 1.5 s walked the path to x = -385, as before the scatter. Walking at a rock at (712, 992) from 450 cm away: stopped short of it and slid aside, 352 cm in 2 s, against 1115 cm in 1.5 s on open ground. Walking at a bush at (-788, -2420): straight through, x from -1088 to 36. The rock components report the `BlockAll` profile and the foliage `NoCollision`. |
