@@ -31,3 +31,7 @@ One command checks the repo's tooling and C++: `pwsh Tools/verify.ps1`. CI check
 ### Checking game changes
 
 Play-in-editor checks are driven through the MCP with no person at the editor. See `docs/agents/verify-loop.md`. To play a whole night with a given turret layout and get its outcome, see `docs/agents/night-playtest.md`. What was measured for each ticket's acceptance criteria is in `docs/mcp/pie-verification.md`; add to it when a ticket is verified.
+
+### Packaging
+
+`pwsh Tools/package.ps1` builds the standalone Windows game into `Packaged/Windows`. The MCP cannot package. See `docs/agents/packaging.md`.
