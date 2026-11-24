@@ -646,3 +646,21 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked
 - **Fallback used:** none
 - **Notes:** One of three packaged runs logged "Material /Game/Beacon/Materials/MI_Rock.MI_Rock missing usage flag InstancedStaticMeshes! Default Material will be used in game." The PCG scatter (F-046) draws rocks and foliage as instanced meshes, and both material instances inherit from the template's `M_FlatCol`, whose `bUsedWithInstancedStaticMeshes` was false. The editor sets such a flag for itself when it first needs it and compiles the shaders, so play in editor never showed the problem; a cooked build cannot, and falls back to the default material. `set_properties` with `{"bUsedWithInstancedStaticMeshes": true}` on `M_FlatCol` marked it dirty, `save_assets` saved it (`is_dirty` then false, and `git status` showed the file), and three later packaged runs logged no warning. Read a packaged build's log once after any new use of a material: some problems exist only in a cooked build.
+
+### F-070: Creature meshes, material parameters and vertex colours
+
+- **Ticket:** Shore and creature art pass
+- **Capability:** Static mesh import, materials and Blueprint graphs
+- **Tool used:** `StaticMeshTools.import_file`, `TextureTools.import_file`, `BlueprintTools.add_object_variable`, `create_node`, `connect_pins`, `compile_blueprint`
+- **Outcome:** Worked with a workaround
+- **Fallback used:** Blender for modelling and editor Python for FBX import options
+- **Notes:** The static mesh import tool does not expose the FBX vertex colour option. The initial import reported `IGNORE`. Reimporting with `REPLACE` carries the painted motion weights, gait phases and bioluminescent markings into `M_Creature`. Each creature type supplies its mesh through `BodyMesh`. The existing Body component receives the mesh before its dynamic material receives the type tint. The same component handles hit flashes. Editable FBX and PNG sources live under `Art/Beacon`.
+
+### F-071: Replacing meshes in generated island scatter
+
+- **Ticket:** Shore and creature art pass
+- **Capability:** PCG asset and instance editing
+- **Tool used:** Editor Python through the Slate console
+- **Outcome:** Worked with a workaround
+- **Fallback used:** Editor Python to update and verify the generated volume's mesh components
+- **Notes:** Iterating the weighted selector's `mesh_entries` and editing its nested descriptors changed copies. Writing a new list of the edited entries back to the selector updated the graph. After flushing the PCG cache and regenerating the volume, its components contained 6 shale outcrops and 10 granite boulders with `BlockAll`, and 69 marram tufts with `NoCollision`. Save both the graph and the volume's external actor package to preserve the result on reopening the level.

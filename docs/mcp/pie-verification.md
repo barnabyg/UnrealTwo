@@ -193,3 +193,22 @@ Not play in editor: the packaged game runs outside the editor and has no MCP ser
 | Packaged output is git-ignored | `git check-ignore -v Packaged/Windows/Beacon.exe` matches `/Packaged/` in `.gitignore`. |
 | Fallbacks and failures recorded | F-065 to F-069. |
 | Clean log | The packaged game's log had no `Warning:` or `Error:` line in the three menu-driven runs, and none in the automated runs apart from the material warning that F-069 fixed. |
+
+## Shore and creature art pass
+
+Checked on 2026-11-24 in the island level and the Windows Development build.
+
+| Check | Result |
+|---|---|
+| Creature appearance | Spawned the playable creature Blueprint with each of the three type assets. The Body component selected the hermit crab, mantis shrimp and anglerfish meshes at the Shambler, Runner and Hunter gameplay scales. [Daylight lineup](beacon-shore-lineup.jpg) |
+| Player hit detection and feedback | A simple visibility trace from above hit the Body component on each creature. Applying one point of damage then reduced each creature's health by one and set the visible material's `Flash` parameter to 1.0. |
+| Island scatter | The regenerated level contained 6 shale outcrops and 10 granite boulders with blocking collision, plus 69 grass tufts with collision disabled. |
+| Night 3 | The six-turret ring from the night playtest guide killed all 40 enemies in both PIE and the packaged game. All six turrets survived and the lighthouse finished at 100/100 in both runs. The final PIE report and packaged runtime log recorded no warnings or errors. |
+
+For a visual check from PowerShell on a Windows machine with the project's Unreal build prerequisites, package and launch from the repository root with this command.
+
+```powershell
+Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe -windowed }
+```
+
+Choose Play or New Game, skip the flyover with Enter and walk to the shore to see the grass, stone, rippled sand and moving water. Press N for the first night. Watch for the Shambler's spiral shell in wave one, the smaller Runner in wave two and the Hunter's luminous lure in wave three.
