@@ -45,11 +45,12 @@ EXPECTED_NOISE = (
 )
 
 
-# The main menu button that starts a game, and the key that skips the intro shot after it.
-PLAY_BUTTON = "Play"
+# The main menu button that starts a new game: "Play" until a save exists, "New Game" after.
+START_BUTTONS = ("Play", "New Game")
+# The key that skips the intro shot.
 SKIP_INTRO_KEY = "Enter"
-# The hand-off from the intro takes about a second; each attempt reads the game state once.
-START_GAME_ATTEMPTS = 8
+# The hand-off from the intro takes about a second of game time; allow for a slow editor.
+START_GAME_TIMEOUT_SECONDS = 20.0
 
 # The level viewport panel covers at least this share of the editor window.
 VIEWPORT_MIN_AREA = 0.4
@@ -211,15 +212,24 @@ class Client:
         image = self.call(SLATE, "Screenshot", {"ref": viewport_panel_ref(snapshot)})
         write_png(png, image["data"])
 
-    def click(self, label: str, kind: str = "button") -> None:
-        """Click a widget of the running game or the editor by the start of its label.
+    def ui_snapshot(self) -> str:
+        """The Slate widget tree, which includes the running game's own UMG widgets."""
+        snapshot: str = self.call(SLATE, "Snapshot", {"ref": "", "maxDepth": 60})
+        if not snapshot.strip():
+            raise ToolError("the editor reports no widgets: its window is probably minimised")
+        return snapshot
+
+    def click_ref(self, ref: str, label: str) -> None:
+        if not self.call(SLATE, "Click", {"ref": ref}):
+            raise ToolError(f'the button "{label}" did not take the click')
+
+    def click(self, label: str) -> None:
+        """Click a button of the running game or the editor by its label, or the start of it.
 
         UMG widgets are Slate widgets, so the game's own buttons appear in the
         snapshot while PIE runs and take a real click.
         """
-        snapshot: str = self.call(SLATE, "Snapshot", {"ref": "", "maxDepth": 60})
-        if not self.call(SLATE, "Click", {"ref": widget_ref(snapshot, kind, label)}):
-            raise ToolError(f'the {kind} "{label}" did not take the click')
+        self.click_ref(widget_ref(self.ui_snapshot(), "button", label), label)
 
     def pie_state(self) -> dict[str, Any]:
         """Read the running game's state through Tools/editor_python/pie_state.py."""
@@ -271,21 +281,29 @@ class Client:
         return marker
 
     def start_game(self) -> None:
-        """From the main menu, press Play, skip the intro shot and wait until the game has begun."""
-        self.click(PLAY_BUTTON)
+        """From the main menu, start a new game, skip the intro shot and wait until play begins.
+
+        A new game replaces the save in the play-in-editor save slot.
+        """
+        self.click_ref(start_button_ref(self.ui_snapshot()), "/".join(START_BUTTONS))
         self.console(f"Input.+key {SKIP_INTRO_KEY}")
         self.console(f"Input.-key {SKIP_INTRO_KEY}")
-        for _ in range(START_GAME_ATTEMPTS):
-            if self.pie_state().get("started"):
+        deadline = time.monotonic() + START_GAME_TIMEOUT_SECONDS
+        while True:
+            state = self.pie_state()
+            if "error" in state:
+                raise ToolError(f"could not read the game state: {state['error']}")
+            if state.get("started"):
                 return
+            if time.monotonic() >= deadline:
+                raise ToolError("the game did not start after the menu button and skipping the intro")
             time.sleep(0.5)
-        raise ToolError("the game did not start after Play and skipping the intro")
 
     def verify(self, png: Path, seconds: float, *, stay_on_menu: bool = False) -> list[str]:
         """The verify loop: start PIE, start a game, wait, capture, stop PIE, return problem log lines.
 
         The game opens on its main menu and then plays an intro shot, so the loop
-        presses Play and skips the shot unless asked to stay on the menu.
+        starts a new game and skips the shot unless asked to stay on the menu.
         """
         marker = self.mark_log()
         self.start_pie()
@@ -318,23 +336,48 @@ def viewport_panel_ref(snapshot: str) -> str:
     return best
 
 
-def widget_ref(snapshot: str, kind: str, label: str) -> str:
-    """Ref of the enabled widget of this kind whose label starts with the given text.
+def widget_ref(snapshot: str, kind: str, label: str, *, exact: bool = False) -> str:
+    """Ref of the enabled widget of this kind with this label, or whose label starts with it.
 
-    An exact label wins over a longer one, so "Play" does not pick "Play in a new window".
+    An exact label wins over a longer one, so "Play" does not pick "Play in a new
+    window". Without an exact match there must be one enabled candidate: two are an
+    error, not a guess. With `exact`, longer labels are not considered at all.
     """
-    matches: list[tuple[str, str, bool]] = []
+    enabled: dict[str, str] = {}
+    disabled: set[str] = set()
     for line in snapshot.splitlines():
         found = re.match(rf'\s*{re.escape(kind)} "(?P<label>[^"]*)"(?P<rest>.*)\[ref=(?P<ref>\w+)\]', line)
-        if found and found.group("label").startswith(label):
-            matches.append((found.group("label"), found.group("ref"), "[disabled]" in found.group("rest")))
-    if not matches:
-        raise ToolError(f'no {kind} labelled "{label}" is on screen')
-    matches.sort(key=lambda match: match[0] != label)
-    _, ref, disabled = matches[0]
+        if not found:
+            continue
+        text = found.group("label")
+        if text != label and (exact or not text.startswith(label)):
+            continue
+        if "[disabled]" in found.group("rest"):
+            disabled.add(text)
+        else:
+            enabled.setdefault(text, found.group("ref"))
+    if label in enabled:
+        return enabled[label]
+    if len(enabled) == 1:
+        return next(iter(enabled.values()))
+    if len(enabled) > 1:
+        raise ToolError(f'more than one {kind} starts with "{label}": {sorted(enabled)}')
     if disabled:
         raise ToolError(f'the {kind} "{label}" is disabled')
-    return ref
+    raise ToolError(f'no {kind} labelled "{label}" is on screen')
+
+
+def start_button_ref(snapshot: str) -> str:
+    """Ref of the main menu button that starts a new game.
+
+    The button reads "Play" until a save exists and "New Game" after that.
+    """
+    for label in START_BUTTONS:
+        try:
+            return widget_ref(snapshot, "button", label, exact=True)
+        except ToolError:
+            continue
+    raise ToolError(f"the main menu is not showing: none of the buttons {list(START_BUTTONS)} is on screen")
 
 
 def write_png(png: Path, base64_data: str) -> None:
@@ -439,8 +482,7 @@ def run_describe(client: Client, args: argparse.Namespace) -> None:
 
 def run_verify(client: Client, args: argparse.Namespace) -> int:
     problems = client.verify(args.png, args.seconds, stay_on_menu=args.menu)
-    for line in problems:
-        print(line)
+    print_lines(problems)
     print(f"screenshot: {args.png}  log problems: {len(problems)}")
     return 1 if problems else 0
 

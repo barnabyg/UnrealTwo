@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from beacon_mcp import ToolError, find_image, strip_images, viewport_panel_ref, widget_ref
+from beacon_mcp import ToolError, find_image, start_button_ref, strip_images, viewport_panel_ref, widget_ref
 from gen_inventory import one_line, render
 
 IMAGE = {"mimeType": "image/png", "data": "A" * 400}
@@ -94,3 +94,44 @@ def test_widget_ref_refuses_disabled_and_missing_widgets() -> None:
         widget_ref(GAME_UI, "button", "Sniper")
     with pytest.raises(ToolError, match="no button"):
         widget_ref(GAME_UI, "button", "Restart")
+
+
+def test_widget_ref_takes_an_enabled_match_over_a_disabled_one_with_the_same_start() -> None:
+    snapshot = "\n".join(
+        [
+            'button "Sniper  -  cost 40" [disabled] [pos=1,1 size=9,9] [ref=b1]',
+            'button "Sniper rifle" [pos=1,1 size=9,9] [ref=b2]',
+        ]
+    )
+
+    assert widget_ref(snapshot, "button", "Sniper") == "b2"
+
+
+def test_widget_ref_refuses_to_guess_between_two_enabled_matches() -> None:
+    with pytest.raises(ToolError, match="more than one"):
+        widget_ref(GAME_UI, "button", "Pla")
+
+
+def test_widget_ref_with_exact_ignores_longer_labels() -> None:
+    longer_only = 'button "Play in a new window" [pos=10,10 size=20,20] [ref=b9]'
+
+    with pytest.raises(ToolError, match="no button"):
+        widget_ref(longer_only, "button", "Play", exact=True)
+
+
+def test_start_button_ref_is_play_without_a_save_and_new_game_with_one() -> None:
+    with_save = "\n".join(
+        [
+            'button "Continue" [pos=655,560 size=280,72] [ref=b3]',
+            'button "New Game" [pos=655,690 size=280,72] [ref=b4]',
+            'button "Play in a new window" [pos=10,10 size=20,20] [ref=b9]',
+        ]
+    )
+
+    assert start_button_ref(GAME_UI) == "b250"
+    assert start_button_ref(with_save) == "b4"
+
+
+def test_start_button_ref_says_when_the_menu_is_not_showing() -> None:
+    with pytest.raises(ToolError, match="main menu"):
+        start_button_ref('button "Restart" [pos=1,1 size=9,9] [ref=b7]')
