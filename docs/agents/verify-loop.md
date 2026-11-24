@@ -10,7 +10,7 @@ The editor must be running with the MCP server up (see [unreal-mcp.md](unreal-mc
 Set-Location C:\docs\git\UnrealTwo; python Tools/mcp/beacon_mcp.py verify --png Saved/BeaconScreenshots/check.png --seconds 5
 ```
 
-It starts PIE in the level viewport, clicks Play on the main menu, skips the intro shot, waits, saves a screenshot of the game, stops PIE, and prints every warning or error the Output Log gained during the run. It exits 0 only when there were none. Add `--menu` to stay on the main menu instead.
+It starts PIE in the level viewport, starts a new game from the main menu, skips the intro shot, waits, saves a screenshot of the game, stops PIE, and prints every warning or error the Output Log gained during the run. It exits 0 only when there were none. Add `--menu` to stay on the main menu instead.
 
 ## The steps, as MCP tool calls
 
@@ -20,7 +20,7 @@ The command above is a wrapper. These are the calls it makes, for agents that ca
 |---|---|---|
 | Mark the log | `SlateInspectorToolset.Snapshot`, `Click`, `Type` | Types `py print('<marker>')` into the editor's `Cmd` box, so later log reads can ignore everything before the marker. |
 | Start PIE | `EditorAppToolset.StartPIE` | `{"options": {"bSimulate": false, "playMode": "PlayMode_InViewPort", "warmupSeconds": 2.0}}`. Returns after BeginPlay and the warm-up. |
-| Start a game | `SlateInspectorToolset.Snapshot`, then `Click` on the ref of `button "Play"` | The game opens on its main menu and nothing runs until Play is pressed. The game's widgets are in the snapshot like any editor widget. A ten-second intro shot follows; `Input.+key Enter` skips it. The `started` field of the game state turns true when play begins. |
+| Start a game | `SlateInspectorToolset.Snapshot`, then `Click` on the ref of `button "Play"`, or `button "New Game"` once a save exists | The game opens on its main menu and nothing runs until a game is started. A new game replaces the save in `Saved/SaveGames`, which play-in-editor shares with nothing else. The game's widgets are in the snapshot like any editor widget. An intro shot follows, nine seconds and a one-second blend; `Input.+key Enter` skips it. The `started` field of the game state turns true when play begins. |
 | Act on the game | `SlateInspectorToolset.Type` into the `Cmd` box | While PIE runs, console commands go to the game. See "Driving the game". |
 | Read game state | `Type` into the `Cmd` box: `py "<repo>/Tools/editor_python/pie_state.py"`, then `LogsToolset.GetLogEntries` with pattern `LogPython` | The script prints one JSON line that starts with `PIESTATE`; take the last one. |
 | Capture | `SlateInspectorToolset.Screenshot` on the viewport panel | `EditorAppToolset.CaptureViewport` renders the editor world even during PIE, so it cannot show the game. |
@@ -50,7 +50,7 @@ client = Client()
 marker = client.mark_log()
 client.start_pie()
 try:
-    client.start_game()  # presses Play on the main menu and skips the intro shot
+    client.start_game()  # starts a new game from the main menu and skips the intro shot
     client.console("Input.+key W")
     time.sleep(1.5)
     client.console("Input.-key W")
@@ -71,6 +71,8 @@ Blueprint variables cannot be set from editor Python during PIE unless they are 
 
 ## Things that will trip you
 
+- The editor window must not be minimised. A minimised editor answers every tool call, but the Slate snapshot comes back empty, so nothing can be clicked, typed or captured.
+- Rewriting an event with the graph DSL leaves the old nodes in the graph, disconnected. After rewriting, run `python Tools/mcp/graph_orphans.py <blueprint path>` to list them and `--delete` to remove them (finding F-055).
 - Click the `Cmd` box before typing. `Type` on an unfocused box returns false and does nothing.
 - A floating editor window, such as the Message Log, takes focus and makes `Type` fail. Close it with `SlateInspectorToolset.Windows`.
 - `CaptureViewport` needs `captureTransform` and `annotations` even though its schema marks them optional.

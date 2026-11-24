@@ -2,7 +2,7 @@
 
 What the agent measured in play-in-editor (PIE) for each acceptance criterion of tickets #4 to #15, on 2026-11-23 and 2026-11-24. Every run was started, driven, read and stopped through the MCP as described in [verify-loop.md](../agents/verify-loop.md). Positions are in centimetres; the lighthouse stands at the origin. Game state was read with `Tools/editor_python/pie_state.py`.
 
-**Clean log.** Each final run below ended with no `Warning:` or `Error:` line added to the Output Log between the start marker and the stop, apart from the expected noise listed in [unreal-mcp.md](../agents/unreal-mcp.md). The same is true of a plain `beacon_mcp.py verify` run on the final commit.
+**Clean log.** Each final run below ended with no `Warning:` or `Error:` line added to the Output Log between the start marker and the stop, apart from the expected noise listed in [unreal-mcp.md](../agents/unreal-mcp.md), and apart from the bad save files of #15, where the row says what was logged. A plain `beacon_mcp.py verify` run passed after #10 and again after #14.
 
 ## #4 Walkable island
 
@@ -80,20 +80,20 @@ Buttons were pressed with `SlateInspectorToolset.Click` on the game's own widget
 | Criterion | Evidence |
 |---|---|
 | Main menu on launch, Play starts the game | At PIE start the snapshot lists `text "BEACON"` and `button "Play"`; `started` false, no phase text. After a click on Play: `started` true, phase text "Day 1  -  night 1 falls in 42 s", the HUD on screen. |
-| HUD shows health, phase and night, wave progress, resources, live | Day: "Lighthouse  100 / 100", "Day 1  -  night 1 falls in 41 s", "Resources  60", "Waves: none until nightfall". After 40 damage at night: "Lighthouse  45 / 100", "Night 1", "Wave 2 / 3  -  creatures left: 3", "Resources  30". The countdown fell from 42 to 33 between two captures and the health bar shortened. |
+| HUD shows health, phase and night, wave progress, resources, live | Day: "Lighthouse  100 / 100", "Day 1  -  night 1 falls in 41 s", "Resources  60", "Waves: none until nightfall". At night, with the lighthouse already down to 85 from creature attacks, 40 more damage: "Lighthouse  45 / 100", "Night 1", "Wave 2 / 3  -  creatures left: 3", "Resources  30". The countdown fell from 42 to 33 between two captures and the health bar shortened. |
 | Build menu lists types with costs, disables unaffordable | B opens it: buttons "Sentry  -  cost 25   (selected)", "Sniper  -  cost 40", "Sprayer  -  cost 30". A click on Sniper closed the menu and set the selection to Sniper; E then placed a Sniper and resources fell from 60 to 20. With 30 resources the Sniper button is marked `[disabled]` and drawn dimmed, and a click on it changed nothing. |
 | Game over shows the night reached, restart works | Lighthouse to 0 during night one: game paused, "THE LIGHTHOUSE HAS FALLEN", "You reached night 1", `button "Restart"`. After a click on Restart: game time back to 6 s, `started` true with no menu, day one, 60 resources, lighthouse 100, no turrets, and holding W moved the player. |
-| UMG widgets, debug text removed | Five Widget Blueprints under `Content/Beacon/UI`. The game mode, creature, turret and lighthouse graphs no longer contain a `PrintString` node, and the HUD's game-over text block is gone. |
+| UMG widgets, debug text removed | Five Widget Blueprints under `Content/Beacon/UI`. The HUD's game-over text block is gone. `find_nodes` over every graph of every Beacon Blueprint finds no print node, and since #12 no debug-draw node. The first check of this read the graphs back as DSL and missed six disconnected `PrintString` nodes, which have since been deleted (finding F-055). |
 
 ## #12 Combat feedback
 
 | Criterion | Evidence |
 |---|---|
 | Creatures flash on damage, from a material parameter on a material instance | The creature's body material in PIE is a dynamic instance of `MI_Creature`. Its `Flash` parameter read 1.0 on the sample after each hit (health 30, then 10) and 0.0 on the samples between. In the capture taken at `Flash` 1.0 the creature is white instead of purple. |
-| Player and turret shots show a Niagara muzzle effect | With a Sentry firing, the live Niagara components were `NS_MuzzleFlash`, one per recent shot; the capture shows the burst at the end of the barrel. Holding fire as the player for one second listed twelve `NS_MuzzleFlash` components. |
+| Player and turret shots show a Niagara muzzle effect | With a Sentry firing (the other two turret types share its graph and were not captured), the live Niagara components were `NS_MuzzleFlash`, one per recent shot; the capture shows the burst at the end of the barrel. Holding fire as the player for one second listed twelve `NS_MuzzleFlash` components. |
 | Creature deaths show a Niagara burst | `NS_DeathBurst` appeared in the component list on the sample where the creature's health reached 0, and the capture shows the burst where it stood. |
 | Sounds, or a finding | Three generated sounds are imported as `SFX_Shot`, `SFX_Hit` and `SFX_Death` and played from the shot, damage and death graphs (finding F-043). The agent cannot hear them; the log is clean while they play. |
-| Effects clean up, frame rate holds through a wave | Five turrets, the player firing throughout, night one played to the end. Frames per second over six-second samples: 115 by day with no combat, then 115, 115, 115, 114, 115, 115 through waves one to three. Live Niagara components peaked at 10 during wave three and were 0 four seconds after the night ended. Measured with the editor's background throttle off (finding F-045). |
+| Effects clean up, frame rate holds through a wave | Five turrets, the player firing throughout, night one played to the end. Frames per second over six-second samples: 115 by day with no combat, then 115, 115, 115, 114, 115, 115 through waves one to three. Live Niagara components counted at the end of each sample peaked at 10 during wave three and were 0 four seconds after the night ended. Measured with the editor's background throttle off (finding F-045). The rate never moved off 115, which is probably the editor's frame limit, so this shows no drop below the limit and not how much headroom is left. Only night one was played. |
 
 ## #13 PCG scatter
 
@@ -103,7 +103,7 @@ Instance positions were read with `Tools/editor_python/scatter_state.py`. The pl
 |---|---|
 | A PCG graph places rock and foliage placeholders | `PCG_IslandScatter` on the `IslandScatter` volume, seed 42: 6 cube rocks, 10 sphere rocks and 69 cone bushes. The overview screenshot shows them across the plateau. |
 | Nothing in the sea, in the lighthouse or blocking the route | Every instance is on the plateau top (rocks at z = 0, foliage at z = 25) between 721 and 2591 cm from the lighthouse, which has a radius of 350. None is on the path from the west shore: over eight seeds the nearest rock centre was 530 cm from the path's centre line (half-width 200). In PIE, path queries from twelve points round the shore to the lighthouse were all valid and complete, 2720 to 2893 cm against 2720 straight, and with no turrets the creatures of night one took the lighthouse from 100 to 60. |
-| A new seed changes the layout | Seed 42 twice: the same sixteen rock positions. Seed 7: sixteen rocks, none at a seed 42 position. Seeds 1 to 6 gave 14 to 18 rocks. |
+| A new seed changes the layout | Seed 42 twice: the same sixteen rock positions. Seed 7: sixteen rocks, none at a seed 42 position. Seeds 1 to 6 gave 14 to 18 rocks; for those seeds only the rock count and the distances to the path were recorded. |
 | Player can walk the island, rocks have collision | Holding W from the start for 1.5 s walked the path to x = -385, as before the scatter. Walking at a rock at (712, 992) from 450 cm away: stopped short of it and slid aside, 352 cm in 2 s, against 1115 cm in 1.5 s on open ground. Walking at a bush at (-788, -2420): straight through, x from -1088 to 36. The rock components report the `BlockAll` profile and the foliage `NoCollision`. |
 
 ## #14 Intro flyover
@@ -112,9 +112,9 @@ Times are game seconds from a per-frame trace (finding F-051), to the nearest th
 
 | Criterion | Evidence |
 |---|---|
-| A Level Sequence with an animated camera plays when the game starts | After a click on Play the view target changed from the character to `CineCameraActor` at 6.33 s. Camera positions one second apart: (4911, 2214, 1275) over the sea to the east, (3117, 1610, 1028), (2165, -192, 905), (1383, -2430, 818) south of the lighthouse, (-160, -2365, 701), (-1686, -1975, 572), (-2174, -1009, 431), (-2196, -119, 265) behind the player. |
-| Runs 5 to 15 seconds and ends by blending to the player camera | The shot ran from 6.33 s to 15.0 s; the view then blended to the character's camera at (-1900, 75, 168) and the game began at 15.67 s. About 9.3 s in all: a nine-second sequence and a one-second blend. |
-| Input disabled during the shot, restored after | Holding W during the shot left the player at (-1500, 0). After the hand-off, W for one second moved the player to x = -386. |
+| A Level Sequence with an animated camera plays when the game starts | After a click on Play the view target changed from the character to `CineCameraActor` at 6.33 s. Camera positions one second apart: (4911, 2214, 1275) over the sea to the east, (3117, 1610, 1028), (2165, -192, 905), (1383, -2430, 818) south of the lighthouse, (-160, -2365, 701), (-1686, -1975, 572), (-2174, -1009, 431), (-2196, -119, 265) behind the player. That is about half a circle round the lighthouse, from east through south to west. |
+| Runs 5 to 15 seconds and ends by blending to the player camera | The sequence is nine seconds long and the blend one second, ten in all. Measured: the shot ran from 6.33 s to 15.0 s, then the view blended to the character's camera at (-1900, 75, 168) and the game began at 15.67 s, which is 9.3 s at the trace's resolution of a third of a second. |
+| Input disabled during the shot, restored after | Holding W during the shot left the player at (-1500, 0). After the hand-off, W for one second moved the player to x = -386. Only movement was tried; fire, build and the build menu are events on the same pawn, whose input is switched off as a whole. |
 | Skip ends the shot early with the same state | Enter at 10.67 s: the view went to the character at once, blending from (235, -1828, 622), and the game began at 11.33 s. The state two seconds later was the same in both runs: started, day 1, 60 resources, 8 pickups, no turrets, lighthouse 100, view target the character, camera at (-1900, 75, 168), player at (-1500, 0, 94). |
 
 ## #15 Save between nights
@@ -128,3 +128,11 @@ Stopping PIE and starting it again stands for quitting and relaunching. The save
 | New Game discards the save | With that save present, New Game started day 1 with 60 resources and no turrets, and the file then held night 0, 60 resources, no turrets. |
 | Missing or unreadable save falls back to a new game | No file: the menu offers only "Play". An empty file, a save cut to half its length, a file of zeros and a save with version 99: Continue started day 1 with 60 resources and no turrets and showed "The saved game could not be read. Starting a new game."; the day's autosave then replaced the file. The cut and zeroed files each logged one engine warning. **Not met for one case:** a file of plain text crashed the engine inside `LoadGameFromSlot` (finding F-053). |
 | The format carries a version number | `SaveVersion` is 1 in every file the game wrote. A file written as version 99 was refused by a game whose current version is 1. |
+
+## Not re-run after later changes
+
+Two checks were last made before a later ticket changed the same graphs, and could not be repeated before this record was closed because the editor window was minimised, which hides every widget from the Slate inspector:
+
+- **Game over then Restart** (#11) was measured before #14 and #15. Restart goes straight to play without the intro, and since #15 it also deletes the save.
+- **A plain `beacon_mcp.py verify` run** was last made after #14. Since #15 the menu's start button reads "New Game" once a save exists, and `start_game` was changed to press either label; that change is covered by unit tests but not by a run.
+
