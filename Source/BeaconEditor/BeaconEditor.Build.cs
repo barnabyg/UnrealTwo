@@ -7,6 +7,6 @@ public class BeaconEditor : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "AssetRegistry", "Core", "CoreUObject", "Engine", "ToolsetRegistry" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "AIModule", "Core", "CoreUObject", "Engine", "ToolsetRegistry" });
 	}
 }

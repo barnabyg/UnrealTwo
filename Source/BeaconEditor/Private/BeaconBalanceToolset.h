@@ -17,7 +17,7 @@ struct FBeaconTurretPlacement
 	UPROPERTY(BlueprintReadWrite, Category = "BeaconBalanceToolset")
 	FString Type;
 
-	/** World X in centimetres. The lighthouse stands at the origin. */
+	/** World X in centimetres. The lighthouse stands at the origin, and a turret stands 350 to 2800 cm from it. */
 	UPROPERTY(BlueprintReadWrite, Category = "BeaconBalanceToolset")
 	double X = 0.0;
 
@@ -55,9 +55,11 @@ struct FBeaconTurretFigures
 	UPROPERTY(BlueprintReadOnly, Category = "BeaconBalanceToolset")
 	FString Type;
 
+	/** World X of the turret in centimetres, as given. */
 	UPROPERTY(BlueprintReadOnly, Category = "BeaconBalanceToolset")
 	double X = 0.0;
 
+	/** World Y of the turret in centimetres, as given. */
 	UPROPERTY(BlueprintReadOnly, Category = "BeaconBalanceToolset")
 	double Y = 0.0;
 
@@ -182,7 +184,8 @@ public:
 	 * bearings and reports the share it won and the mean of each figure. The same request gives the same answer.
 	 * Use it to compare layouts or to see the effect of a data change before running the game.
 	 * Raises an error if the night is not between 1 and 50, if a turret type is not one of the game's types,
-	 * or if there are more than 32 turrets.
+	 * if a turret is not on the plateau round the lighthouse (350 to 2800 cm from it), if there are more than
+	 * 32 turrets, or if the wave data cannot be simulated (more than 20000 creatures, or a night that never ends).
 	 * @param Night The night to simulate, starting at 1. Nights past the last authored one replay it with more creatures, as the game does.
 	 * @param Turrets The layout: one entry per turret. May be empty.
 	 * @return Total creature health, turret damage dealt and available, the predicted outcome and chance of a win, and a breakdown by wave
@@ -197,6 +200,8 @@ public:
 	static constexpr int32 MaxNight = 50;
 	/** The most turrets SimulateWave accepts in one layout. */
 	static constexpr int32 MaxTurrets = 32;
+	/** The most creatures a night may send for SimulateWave to play it. The authored nights send 18 to 40. */
+	static constexpr int32 MaxCreatures = 20000;
 	/** How many times SimulateWave plays the night, each with its own spawn bearings. */
 	static constexpr int32 Trials = 20;
 

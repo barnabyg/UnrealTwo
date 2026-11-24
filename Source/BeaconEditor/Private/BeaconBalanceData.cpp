@@ -1,7 +1,8 @@
 #include "BeaconBalanceData.h"
 
-#include "AssetRegistry/AssetRegistryModule.h"
-#include "AssetRegistry/IAssetRegistry.h"
+#include "BehaviorTree/Tasks/BTTask_RunEQSQuery.h"
+#include "EnvironmentQuery/EnvQuery.h"
+#include "UObject/UObjectHash.h"
 #include "UObject/UnrealType.h"
 
 namespace
@@ -12,7 +13,7 @@ namespace
 	const TCHAR* const FindLighthouseTaskPath = TEXT("/Game/Beacon/AI/BTTask_FindLighthouse.BTTask_FindLighthouse_C");
 	const TCHAR* const StandBesideTaskPath = TEXT("/Game/Beacon/AI/BTTask_StandBesideTarget.BTTask_StandBesideTarget_C");
 	// A behaviour tree that runs this query sends its creature after turrets (see Tools/editor_python/build_creature_ai.py).
-	const FName TurretQueryPackage = TEXT("/Game/Beacon/AI/EQS_NearestTurret");
+	const TCHAR* const TurretQueryPackage = TEXT("/Game/Beacon/AI/EQS_NearestTurret");
 	// The MoveTo node's acceptable radius: a creature stops this far short of its stand point (same script).
 	constexpr double MoveAcceptanceRadius = 60.0;
 
@@ -152,10 +153,14 @@ namespace
 		{
 			return false;
 		}
-		const IAssetRegistry& AssetRegistry = FAssetRegistryModule::GetRegistry();
-		TArray<FName> Dependencies;
-		AssetRegistry.GetDependencies(BehaviorTree->GetPackage()->GetFName(), Dependencies);
-		return Dependencies.Contains(TurretQueryPackage);
+		// A tree's nodes are objects inside the tree asset.
+		TArray<UObject*> Nodes;
+		GetObjectsWithOuter(BehaviorTree, Nodes);
+		return Nodes.ContainsByPredicate([](const UObject* Node) {
+			const UBTTask_RunEQSQuery* QueryTask = Cast<UBTTask_RunEQSQuery>(Node);
+			const UEnvQuery* Query = QueryTask != nullptr ? QueryTask->EQSRequest.QueryTemplate.Get() : nullptr;
+			return Query != nullptr && Query->GetPackage()->GetName() == TurretQueryPackage;
+		});
 	}
 
 	FBeaconSimCreatureType ReadCreatureType(FBlueprintReader& Reader, const UObject* Asset)

@@ -155,7 +155,7 @@ void FBeaconBalanceToolsetSpec::Define()
 		});
 
 		It("refuses an unknown turret type and names the known ones", [this]() {
-			const TArray<FBeaconTurretPlacement> Layout = {Place(TEXT("Sentry"), 0.0, 0.0), Place(TEXT("Laser"), 0.0, 0.0)};
+			const TArray<FBeaconTurretPlacement> Layout = {Place(TEXT("Sentry"), 600.0, 0.0), Place(TEXT("Laser"), -600.0, 0.0)};
 			const auto Figures = UBeaconBalanceToolset::SimulateWaveWithData(SampleData(), 1, Layout);
 
 			if (TestTrue(TEXT("an error"), Figures.HasError()))
@@ -167,10 +167,53 @@ void FBeaconBalanceToolsetSpec::Define()
 
 		It("refuses a layout with too many turrets", [this]() {
 			TArray<FBeaconTurretPlacement> Layout;
-			Layout.Init(Place(TEXT("Sentry"), 0.0, 0.0), UBeaconBalanceToolset::MaxTurrets + 1);
+			Layout.Init(Place(TEXT("Sentry"), 600.0, 0.0), UBeaconBalanceToolset::MaxTurrets + 1);
 			const auto Figures = UBeaconBalanceToolset::SimulateWaveWithData(SampleData(), 1, Layout);
 
 			TestTrue(TEXT("an error"), Figures.HasError() && Figures.GetError().Contains(TEXT("Too many turrets")));
+		});
+
+		It("refuses a turret with no position, which arrives at the lighthouse's own", [this]() {
+			const TArray<FBeaconTurretPlacement> Layout = {Place(TEXT("Sentry"), 600.0, 0.0), Place(TEXT("Sniper"), 0.0, 0.0)};
+			const auto Figures = UBeaconBalanceToolset::SimulateWaveWithData(SampleData(), 1, Layout);
+
+			if (TestTrue(TEXT("an error"), Figures.HasError()))
+			{
+				TestTrue(TEXT("names the turret"), Figures.GetError().Contains(TEXT("Turret 2 of the layout, at (0, 0)")));
+				TestTrue(TEXT("says where a turret can stand"), Figures.GetError().Contains(TEXT("between 350 and 2800 cm")));
+			}
+		});
+
+		It("refuses a turret beyond the plateau", [this]() {
+			const TArray<FBeaconTurretPlacement> Layout = {Place(TEXT("Sentry"), 0.0, -2900.0)};
+			const auto Figures = UBeaconBalanceToolset::SimulateWaveWithData(SampleData(), 1, Layout);
+
+			TestTrue(TEXT("an error"), Figures.HasError() && Figures.GetError().Contains(TEXT("not on buildable ground")));
+		});
+
+		It("refuses wave data that sends more creatures than it will simulate", [this]() {
+			FBeaconBalanceData Data = SampleData();
+			Data.Nights[0].Waves[0].Count = 2000000000;
+			const auto Figures = UBeaconBalanceToolset::SimulateWaveWithData(Data, 1, {});
+
+			TestTrue(TEXT("an error"), Figures.HasError() && Figures.GetError().Contains(TEXT("sends 2000000000 creatures")));
+		});
+
+		It("refuses a wave that lists no creature types", [this]() {
+			FBeaconBalanceData Data = SampleData();
+			Data.Nights[0].Waves[0].Creatures.Empty();
+			const auto Figures = UBeaconBalanceToolset::SimulateWaveWithData(Data, 1, {});
+
+			TestTrue(TEXT("an error"), Figures.HasError() && Figures.GetError().Contains(TEXT("lists no creature types")));
+		});
+
+		It("reports data it cannot simulate within its work limit instead of grinding on", [this]() {
+			FBeaconBalanceData Data = SampleData();
+			Data.Nights[0].Waves[0].Creatures[0].Speed = 0.0;
+			Data.Rules.MaxCreatureChecks = 1000;
+			const auto Figures = UBeaconBalanceToolset::SimulateWaveWithData(Data, 1, {});
+
+			TestTrue(TEXT("an error"), Figures.HasError() && Figures.GetError().Contains(TEXT("could not be simulated")));
 		});
 	});
 

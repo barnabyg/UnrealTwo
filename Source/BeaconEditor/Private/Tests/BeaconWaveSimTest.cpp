@@ -193,6 +193,19 @@ void FBeaconWaveSimSpec::Define()
 		TestTrue(TEXT("different seeds send the creature different ways"), ShotCounts.Num() > 1);
 	});
 
+	It("stops at its work limit when the night would never end", [this]() {
+		FBeaconSimCreatureType Statue = Walker();
+		Statue.Speed = 0.0;
+		const TArray<FBeaconSimWave> Waves = {WaveOf(10, Statue)};
+		FBeaconSimRules Rules;
+		Rules.MaxCreatureChecks = 5000;
+		const FBeaconSimResult Result = BeaconWaveSim::Simulate(Waves, {}, Rules);
+
+		TestTrue(TEXT("ran out of work"), Result.bRanOutOfWork);
+		TestTrue(TEXT("outcome is undecided"), Result.Outcome == EBeaconSimOutcome::Undecided);
+		TestTrue(TEXT("long before the time limit"), Result.DurationSeconds < 60.0);
+	});
+
 	It("gives the same answer for the same input", [this]() {
 		const TArray<FBeaconSimWave> Waves = {WaveOf(12, Walker())};
 		FBeaconSimTurret Turret = TurretAt(600.0, 0.0);

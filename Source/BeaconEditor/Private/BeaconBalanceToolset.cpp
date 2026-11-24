@@ -69,6 +69,21 @@ TValueOrError<FBeaconWaveSimulation, FString> UBeaconBalanceToolset::SimulateWav
 					Index + 1,
 					*JoinTurretTypeNames(Data)));
 		}
+		// A field left out of the request arrives as zero, so a turret with no position lands inside the lighthouse and is caught here.
+		const double FromLighthouse = FVector2D(Placement.X, Placement.Y).Size();
+		if (!FMath::IsFinite(FromLighthouse) || FromLighthouse < Data.BuildableInnerRadius || FromLighthouse > Data.BuildableOuterRadius)
+		{
+			return MakeError(
+				FString::Printf(
+					TEXT(
+						"Turret %d of the layout, at (%s, %s), is not on buildable ground. The lighthouse is at (0, 0) and a turret "
+						"stands between %s and %s cm from it."),
+					Index + 1,
+					*FString::SanitizeFloat(Placement.X, 0),
+					*FString::SanitizeFloat(Placement.Y, 0),
+					*FString::SanitizeFloat(Data.BuildableInnerRadius, 0),
+					*FString::SanitizeFloat(Data.BuildableOuterRadius, 0)));
+		}
 		FBeaconSimTurret& SimTurret = SimTurrets.AddDefaulted_GetRef();
 		SimTurret.Position = FVector2D(Placement.X, Placement.Y);
 		SimTurret.Range = Type->Range;
@@ -88,36 +103,67 @@ TValueOrError<FBeaconWaveSimulation, FString> UBeaconBalanceToolset::SimulateWav
 	FBeaconSimRules Rules = Data.Rules;
 	Rules.CountScale = 1.0 + 0.5 * FMath::Max(Night - Data.Nights.Num(), 0);
 
+	// The wave data is whatever is loaded in the editor, so it is checked like any other input.
+	double NightCreatures = 0.0;
+	for (const FBeaconSimWave& Wave : NightData.Waves)
+	{
+		if (Wave.Creatures.IsEmpty())
+		{
+			return MakeError(FString::Printf(TEXT("A wave of %s lists no creature types."), *NightData.Name));
+		}
+		NightCreatures += FMath::Max(1.0, FMath::RoundToDouble(Wave.Count * Rules.CountScale));
+	}
+	if (NightCreatures > MaxCreatures)
+	{
+		return MakeError(
+			FString::Printf(
+				TEXT("Night %d sends %.0f creatures, and the most this tool simulates is %d. Check the Count of the waves in %s."),
+				Night,
+				NightCreatures,
+				MaxCreatures,
+				*NightData.Name));
+	}
+
 	Figures.Night = Night;
 	Figures.NightData = NightData.Name;
 	Figures.CountScale = Rules.CountScale;
 	Figures.Trials = Trials;
 
-	// Each trial adds its share of the mean, so the sums are the means when the loop ends.
-	const double Share = 1.0 / Trials;
+	// The figures hold sums over the trials until the loop ends, and are divided into means after it.
 	int32 Wins = 0;
 	int32 Losses = 0;
 	for (int32 Trial = 0; Trial < Trials; ++Trial)
 	{
 		Rules.BearingSeed = Trial;
 		const FBeaconSimResult Result = BeaconWaveSim::Simulate(NightData.Waves, SimTurrets, Rules);
+		if (Result.bRanOutOfWork)
+		{
+			return MakeError(
+				FString::Printf(
+					TEXT(
+						"Night %d could not be simulated: after %.0f seconds of game time the model had reached no outcome and "
+						"used all the work it is allowed. Check %s for a creature type that never reaches its target or does no damage."),
+					Night,
+					Result.DurationSeconds,
+					*NightData.Name));
+		}
 
 		Wins += Result.Outcome == EBeaconSimOutcome::Win ? 1 : 0;
 		Losses += Result.Outcome == EBeaconSimOutcome::Loss ? 1 : 0;
-		Figures.TotalTurretDamage += Share * Result.TurretDamageDealt;
-		Figures.TurretDamageCapacity += Share * Result.TurretDamageCapacity;
-		Figures.LighthouseHealthRemaining += Share * Result.LighthouseHealthRemaining;
-		Figures.CreaturesKilled += Share * Result.CreaturesKilled;
-		Figures.DurationSeconds += Share * Result.DurationSeconds;
+		Figures.TotalTurretDamage += Result.TurretDamageDealt;
+		Figures.TurretDamageCapacity += Result.TurretDamageCapacity;
+		Figures.LighthouseHealthRemaining += Result.LighthouseHealthRemaining;
+		Figures.CreaturesKilled += Result.CreaturesKilled;
+		Figures.DurationSeconds += Result.DurationSeconds;
 		for (int32 Index = 0; Index < Result.Turrets.Num(); ++Index)
 		{
 			FBeaconTurretFigures& TurretFigures = Figures.Turrets[Index];
-			TurretFigures.DamageDealt += Share * Result.Turrets[Index].DamageDealt;
-			TurretFigures.ShotsFired += Share * Result.Turrets[Index].ShotsFired;
+			TurretFigures.DamageDealt += Result.Turrets[Index].DamageDealt;
+			TurretFigures.ShotsFired += Result.Turrets[Index].ShotsFired;
 			if (Result.Turrets[Index].bDestroyed)
 			{
-				TurretFigures.DestroyedChance += Share;
-				Figures.TurretsLost += Share;
+				TurretFigures.DestroyedChance += 1.0;
+				Figures.TurretsLost += 1.0;
 			}
 		}
 		if (Trial > 0)
@@ -135,7 +181,23 @@ TValueOrError<FBeaconWaveSimulation, FString> UBeaconBalanceToolset::SimulateWav
 			WaveFigures.CreatureHealth = Result.Waves[Index].CreatureHealth;
 		}
 	}
-	Figures.WinChance = Share * Wins;
+	for (double* Sum :
+		 {&Figures.TotalTurretDamage,
+		  &Figures.TurretDamageCapacity,
+		  &Figures.LighthouseHealthRemaining,
+		  &Figures.CreaturesKilled,
+		  &Figures.DurationSeconds,
+		  &Figures.TurretsLost})
+	{
+		*Sum /= Trials;
+	}
+	for (FBeaconTurretFigures& TurretFigures : Figures.Turrets)
+	{
+		TurretFigures.DamageDealt /= Trials;
+		TurretFigures.ShotsFired /= Trials;
+		TurretFigures.DestroyedChance /= Trials;
+	}
+	Figures.WinChance = static_cast<double>(Wins) / Trials;
 	Figures.PredictedOutcome = MostFrequentOutcome(Wins, Losses, Trials - Wins - Losses);
 	return MakeValue(MoveTemp(Figures));
 }

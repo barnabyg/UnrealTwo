@@ -116,6 +116,7 @@ FBeaconSimResult BeaconWaveSim::Simulate(
 	double LighthouseHealth = Rules.LighthouseHealth;
 	int32 NextSpawn = 0;
 	double Time = 0.0;
+	int64 CreatureChecks = 0;
 
 	for (int64 Step = 0;; ++Step)
 	{
@@ -131,6 +132,7 @@ FBeaconSimResult BeaconWaveSim::Simulate(
 			Creature.Health = Creature.Type->MaxHealth;
 		}
 
+		CreatureChecks += Creatures.Num();
 		for (FCreature& Creature : Creatures)
 		{
 			if (Creature.Type->bHuntsTurrets && (Creature.TargetTurret == INDEX_NONE || !TurretStates[Creature.TargetTurret].bStanding))
@@ -181,6 +183,7 @@ FBeaconSimResult BeaconWaveSim::Simulate(
 				continue;
 			}
 			const FBeaconSimTurret& Turret = Turrets[TurretIndex];
+			CreatureChecks += Creatures.Num();
 			const int32 TargetIndex = FindNearest(TConstArrayView<FCreature>(Creatures), Turret.Position, [](const FCreature& Creature) {
 				return Creature.Position;
 			}, [](int32) { return true; });
@@ -207,7 +210,8 @@ FBeaconSimResult BeaconWaveSim::Simulate(
 			Result.Outcome = EBeaconSimOutcome::Win;
 			break;
 		}
-		if (Time >= Rules.MaxSeconds)
+		Result.bRanOutOfWork = CreatureChecks > Rules.MaxCreatureChecks;
+		if (Time >= Rules.MaxSeconds || Result.bRanOutOfWork)
 		{
 			Result.Outcome = EBeaconSimOutcome::Undecided;
 			break;

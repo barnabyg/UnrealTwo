@@ -57,6 +57,13 @@ struct FBeaconSimRules
 	/** The model gives up and reports Undecided after this much game time. */
 	double MaxSeconds = 1800.0;
 	/**
+	 * The model also gives up once it has looked at a creature this many times, counting one look for each
+	 * creature it moves and each creature a turret considers. An ordinary night needs a small fraction of
+	 * this; data that keeps hundreds of creatures alive and idle for the whole of MaxSeconds would
+	 * otherwise hold the editor for minutes.
+	 */
+	int64 MaxCreatureChecks = 200'000'000;
+	/**
 	 * Seed for the bearing each creature spawns at, which the game picks at random.
 	 * Unset, the bearings are spread evenly instead, so that a single run is a fair sample.
 	 */
@@ -69,7 +76,7 @@ enum class EBeaconSimOutcome : uint8
 	Win,
 	/** The lighthouse reached zero health. */
 	Loss,
-	/** Neither happened within FBeaconSimRules::MaxSeconds. */
+	/** Neither happened within FBeaconSimRules::MaxSeconds or MaxCreatureChecks. */
 	Undecided,
 };
 
@@ -90,6 +97,8 @@ struct FBeaconSimWaveResult
 struct FBeaconSimResult
 {
 	EBeaconSimOutcome Outcome = EBeaconSimOutcome::Undecided;
+	/** True if the model stopped at FBeaconSimRules::MaxCreatureChecks. The outcome is then Undecided. */
+	bool bRanOutOfWork = false;
 	/** Game time from the first spawn to the moment the outcome was decided. */
 	double DurationSeconds = 0.0;
 	double LighthouseHealthRemaining = 0.0;
