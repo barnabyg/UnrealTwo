@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 import pytest
-from beacon_mcp import ToolError, find_image, start_button_ref, strip_images, viewport_panel_ref, widget_ref
+from beacon_mcp import (
+    ToolError,
+    find_image,
+    next_start_step,
+    start_button_ref,
+    strip_images,
+    viewport_panel_ref,
+    widget_ref,
+)
 from gen_inventory import one_line, render
 
 IMAGE = {"mimeType": "image/png", "data": "A" * 400}
@@ -135,3 +143,25 @@ def test_start_button_ref_is_play_without_a_save_and_new_game_with_one() -> None
 def test_start_button_ref_says_when_the_menu_is_not_showing() -> None:
     with pytest.raises(ToolError, match="main menu"):
         start_button_ref('button "Restart" [pos=1,1 size=9,9] [ref=b7]')
+
+
+def test_next_start_step_clicks_the_menu_until_the_click_takes() -> None:
+    on_menu = {"started": False, "intro_playing": False}
+
+    assert next_start_step(on_menu, menu_showing=True, skipped=False) == "click"
+
+
+def test_next_start_step_skips_the_intro_once_and_then_waits() -> None:
+    in_intro = {"started": False, "intro_playing": True}
+
+    assert next_start_step(in_intro, menu_showing=False, skipped=False) == "skip"
+    assert next_start_step(in_intro, menu_showing=False, skipped=True) == "wait"
+
+
+def test_next_start_step_waits_through_the_hand_off_and_stops_when_play_begins() -> None:
+    handing_off = {"started": False, "intro_playing": False}
+
+    assert next_start_step(handing_off, menu_showing=False, skipped=True) == "wait"
+    assert (
+        next_start_step({"started": True, "intro_playing": False}, menu_showing=False, skipped=True) == "done"
+    )

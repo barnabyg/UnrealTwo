@@ -49,8 +49,8 @@ EXPECTED_NOISE = (
 START_BUTTONS = ("Play", "New Game")
 # The key that skips the intro shot.
 SKIP_INTRO_KEY = "Enter"
-# The hand-off from the intro takes about a second of game time; allow for a slow editor.
-START_GAME_TIMEOUT_SECONDS = 20.0
+# Long enough to watch the whole intro if the skip is missed, with a slow editor.
+START_GAME_TIMEOUT_SECONDS = 40.0
 
 # The level viewport panel covers at least this share of the editor window.
 VIEWPORT_MIN_AREA = 0.4
@@ -283,20 +283,28 @@ class Client:
     def start_game(self) -> None:
         """From the main menu, start a new game, skip the intro shot and wait until play begins.
 
-        A new game replaces the save in the play-in-editor save slot.
+        Each step is confirmed from the game's state: a click on a window that has
+        just come to the front can be swallowed, and a skip pressed before the shot
+        starts does nothing. A new game replaces the save in the play-in-editor slot.
         """
-        self.click_ref(start_button_ref(self.ui_snapshot()), "/".join(START_BUTTONS))
-        self.console(f"Input.+key {SKIP_INTRO_KEY}")
-        self.console(f"Input.-key {SKIP_INTRO_KEY}")
         deadline = time.monotonic() + START_GAME_TIMEOUT_SECONDS
+        skipped = False
         while True:
             state = self.pie_state()
             if "error" in state:
                 raise ToolError(f"could not read the game state: {state['error']}")
-            if state.get("started"):
+            snapshot = self.ui_snapshot()
+            step = next_start_step(state, menu_showing=start_button_showing(snapshot), skipped=skipped)
+            if step == "done":
                 return
+            if step == "click":
+                self.click_ref(start_button_ref(snapshot), "/".join(START_BUTTONS))
+            elif step == "skip":
+                self.console(f"Input.+key {SKIP_INTRO_KEY}")
+                self.console(f"Input.-key {SKIP_INTRO_KEY}")
+                skipped = True
             if time.monotonic() >= deadline:
-                raise ToolError("the game did not start after the menu button and skipping the intro")
+                raise ToolError(f"the game did not start: still at the '{step}' step after the time allowed")
             time.sleep(0.5)
 
     def verify(self, png: Path, seconds: float, *, stay_on_menu: bool = False) -> list[str]:
@@ -365,6 +373,27 @@ def widget_ref(snapshot: str, kind: str, label: str, *, exact: bool = False) -> 
     if disabled:
         raise ToolError(f'the {kind} "{label}" is disabled')
     raise ToolError(f'no {kind} labelled "{label}" is on screen')
+
+
+def next_start_step(state: dict[str, Any], *, menu_showing: bool, skipped: bool) -> str:
+    """What `start_game` should do next: "click" the menu, "skip" the intro, "wait" or stop as "done".
+
+    Between the intro and play there is a one-second blend in which neither the
+    menu nor the intro is up; that, like an intro already skipped, is a wait.
+    """
+    if state.get("started"):
+        return "done"
+    if state.get("intro_playing"):
+        return "wait" if skipped else "skip"
+    return "click" if menu_showing else "wait"
+
+
+def start_button_showing(snapshot: str) -> bool:
+    try:
+        start_button_ref(snapshot)
+    except ToolError:
+        return False
+    return True
 
 
 def start_button_ref(snapshot: str) -> str:
