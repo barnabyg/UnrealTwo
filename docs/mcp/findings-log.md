@@ -682,3 +682,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** Worked with a workaround
 - **Fallback used:** Editor Python attached the light-shaft mesh to the rotating spotlight and saved the existing island actor's external package.
 - **Notes:** Enabling child propagation on the existing `SwitchBeam` visibility call made the shaft follow the day/night switch. The same function sets `LanternPower` on the lens. After compilation, the component template reported `NoCollision` but the placed component still reported `BlockAllDynamic`. Setting the placed component's profile and saving the external package fixed it. On a fresh PIE level load the shaft reported `NoCollision`, had navigation disabled, and allowed simple and complex visibility traces through it.
+
+### F-074: tuning the interval between creatures
+
+- **Ticket:** Faster creature spawns
+- **Capability:** Data assets and PIE control
+- **Tool used:** `ObjectTools.get_properties`, `ObjectTools.set_properties` and `AssetTools.save_assets`
+- **Outcome:** Worked
+- **Fallback used:** None
+- **Notes:** Each of the nine `DA_Wave_N*_*` assets supplies its own `SpawnInterval` in seconds. Setting each interval to 75% of its previous value increased the within-wave spawn rate by one third. To measure the actual spacing in PIE, sample the game mode's `SpawnedInWave` each frame and record game time when it increments within the same `WaveIndex`.
