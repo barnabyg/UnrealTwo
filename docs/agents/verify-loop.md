@@ -50,7 +50,7 @@ client = Client()
 marker = client.mark_log()
 client.start_pie()
 try:
-    client.start_game()  # starts a new game from the main menu and skips the intro shot
+    client.start_game()  # starts a new game from the main menu, skips the intro shot, waits for play
     client.console("Input.+key W")
     time.sleep(1.5)
     client.console("Input.-key W")
@@ -71,7 +71,7 @@ Blueprint variables cannot be set from editor Python during PIE unless they are 
 
 ## Things that will trip you
 
-- The editor window must not be minimised. A minimised editor answers every tool call, but the Slate snapshot comes back empty, so nothing can be clicked, typed or captured.
+- The editor window must not be minimised. A minimised editor answers every tool call, but the Slate snapshot comes back empty, so nothing can be clicked, typed or captured. The first click after the window comes back can be lost, so confirm a click from the game's state, as `start_game` does (finding F-056).
 - Rewriting an event with the graph DSL leaves the old nodes in the graph, disconnected. After rewriting, run `python Tools/mcp/graph_orphans.py <blueprint path>` to list them and `--delete` to remove them (finding F-055).
 - Click the `Cmd` box before typing. `Type` on an unfocused box returns false and does nothing.
 - A floating editor window, such as the Message Log, takes focus and makes `Type` fail. Close it with `SlateInspectorToolset.Windows`.

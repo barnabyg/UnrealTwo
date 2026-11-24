@@ -62,7 +62,7 @@ The map above was written before anything was built. These are the places where 
 | EQS | No scripted route to author a query. A person makes it in the EQS editor; editor Python can then put a Run EQS Query task in a tree, and `ObjectTools` can read the query's settings back. | F-030, F-034 |
 | DataTables and DataAssets | Data assets with Blueprint-defined classes cover the need; DataTables stay out of reach without a row struct. | F-028 |
 | UMG | Covered, including layout and fonts through `ObjectTools`, button click events and widgets made at run time. | F-019, F-035 |
-| PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. The Slate inspector reads and clicks the game's own widgets. Frame rate and short timings come from editor Python. | F-013, F-014, F-027, F-037, F-045, F-051 |
+| PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. The Slate inspector reads and clicks the game's own widgets. Frame rate and short timings come from editor Python. | F-013, F-014, F-027, F-037, F-045, F-051, F-056 |
 | Materials | Covered. Reparenting a material instance does not mark it unsaved, so it needs a forced save. | F-041 |
 | Niagara | Covered for systems made from an engine template: emitters and modules are removed and stack inputs set. Results are too large to read without the script client. | F-042 |
 | Audio | No tool, as planned. Sounds are synthesised by a script and imported with editor Python. Nothing can confirm that they are heard. | F-043 |

@@ -2,7 +2,7 @@
 
 What the agent measured in play-in-editor (PIE) for each acceptance criterion of tickets #4 to #15, on 2026-11-23 and 2026-11-24. Every run was started, driven, read and stopped through the MCP as described in [verify-loop.md](../agents/verify-loop.md). Positions are in centimetres; the lighthouse stands at the origin. Game state was read with `Tools/editor_python/pie_state.py`.
 
-**Clean log.** Each final run below ended with no `Warning:` or `Error:` line added to the Output Log between the start marker and the stop, apart from the expected noise listed in [unreal-mcp.md](../agents/unreal-mcp.md), and apart from the bad save files of #15, where the row says what was logged. A plain `beacon_mcp.py verify` run passed after #10 and again after #14.
+**Clean log.** Each final run below ended with no `Warning:` or `Error:` line added to the Output Log between the start marker and the stop, apart from the expected noise listed in [unreal-mcp.md](../agents/unreal-mcp.md), and apart from the bad save files of #15, where the row says what was logged. A plain `beacon_mcp.py verify` run passed on the final tree, three times in a row (see the last section).
 
 ## #4 Walkable island
 
@@ -114,7 +114,7 @@ Times are game seconds from a per-frame trace (finding F-051), to the nearest th
 |---|---|
 | A Level Sequence with an animated camera plays when the game starts | After a click on Play the view target changed from the character to `CineCameraActor` at 6.33 s. Camera positions one second apart: (4911, 2214, 1275) over the sea to the east, (3117, 1610, 1028), (2165, -192, 905), (1383, -2430, 818) south of the lighthouse, (-160, -2365, 701), (-1686, -1975, 572), (-2174, -1009, 431), (-2196, -119, 265) behind the player. That is about half a circle round the lighthouse, from east through south to west. |
 | Runs 5 to 15 seconds and ends by blending to the player camera | The sequence is nine seconds long and the blend one second, ten in all. Measured: the shot ran from 6.33 s to 15.0 s, then the view blended to the character's camera at (-1900, 75, 168) and the game began at 15.67 s, which is 9.3 s at the trace's resolution of a third of a second. |
-| Input disabled during the shot, restored after | Holding W during the shot left the player at (-1500, 0). After the hand-off, W for one second moved the player to x = -386. Only movement was tried; fire, build and the build menu are events on the same pawn, whose input is switched off as a whole. |
+| Input disabled during the shot, restored after | Holding W during the shot left the player at (-1500, 0). After the hand-off, W for one second moved the player to x = -386. The other inputs were tried on the final tree (see the last section). |
 | Skip ends the shot early with the same state | Enter at 10.67 s: the view went to the character at once, blending from (235, -1828, 622), and the game began at 11.33 s. The state two seconds later was the same in both runs: started, day 1, 60 resources, 8 pickups, no turrets, lighthouse 100, view target the character, camera at (-1900, 75, 168), player at (-1500, 0, 94). |
 
 ## #15 Save between nights
@@ -129,10 +129,13 @@ Stopping PIE and starting it again stands for quitting and relaunching. The save
 | Missing or unreadable save falls back to a new game | No file: the menu offers only "Play". An empty file, a save cut to half its length, a file of zeros and a save with version 99: Continue started day 1 with 60 resources and no turrets and showed "The saved game could not be read. Starting a new game."; the day's autosave then replaced the file. The cut and zeroed files each logged one engine warning. **Not met for one case:** a file of plain text crashed the engine inside `LoadGameFromSlot` (finding F-053). |
 | The format carries a version number | `SaveVersion` is 1 in every file the game wrote. A file written as version 99 was refused by a game whose current version is 1. |
 
-## Not re-run after later changes
+## Re-checks on the final tree
 
-Two checks were last made before a later ticket changed the same graphs, and could not be repeated before this record was closed because the editor window was minimised, which hides every widget from the Slate inspector:
+Run after all five tickets, the review fixes and the removal of the unreachable graph nodes (finding F-055).
 
-- **Game over then Restart** (#11) was measured before #14 and #15. Restart goes straight to play without the intro, and since #15 it also deletes the save.
-- **A plain `beacon_mcp.py verify` run** was last made after #14. Since #15 the menu's start button reads "New Game" once a save exists, and `start_game` was changed to press either label; that change is covered by unit tests but not by a run.
-
+| Check | Evidence |
+|---|---|
+| Verify loop, with and without a save | `beacon_mcp.py verify` three times in a row, the first with no save file and the next two with the save the run before left: exit 0 and no log problems each time. |
+| Input during the intro (#14) | With the shot slowed so that it was still playing afterwards, E, B, left mouse, Q, N, W and a look input were pressed: no turret, build menu closed, selection unchanged, no muzzle effect, still day, player at (-1500, 0), yaw 0. After Enter and the hand-off, E placed a turret. |
+| Combat effects (#12) | A Sentry killed a creature: `Flash` read 1.0, `NS_MuzzleFlash` and `NS_DeathBurst` components were seen, the creature was removed. The notice read "Sentry turret placed". |
+| Game over then Restart (#11, #15) | Lighthouse to 0: paused, "THE LIGHTHOUSE HAS FALLEN", "You reached night 0", `button "Restart"`. After Restart: play began with no menu and no intro, game time 6 s, day 1, 60 resources, lighthouse 100, no turrets, view on the character, and W moved the player to x = -386. The save file then held version 1, night 0, 60 resources, no turrets. |
