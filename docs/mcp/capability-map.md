@@ -1,6 +1,6 @@
 # Unreal MCP capability map
 
-For each Beacon feature area: which toolset covers it, or the fallback when nothing does. It was written from the live tool list in [tool-inventory.md](tool-inventory.md) on 2026-11-23, before the features were built. What actually happened is in [findings-log.md](findings-log.md); when the two disagree, the findings log is right.
+For each Beacon feature area: which toolset covers it, or the fallback when nothing does. It was written from the live tool list in [tool-inventory.md](tool-inventory.md) on 2026-11-23, before the features were built, and brought up to date after #18 with what building the game showed. The ratings and the evidence are in [evaluation-report.md](evaluation-report.md) and the detail in [findings-log.md](findings-log.md); when this map and the findings log disagree, the findings log is right.
 
 **Covered** means a toolset can author the thing. **Partly covered** means tools exist but miss a step Beacon needs. **Not covered** means no tool can author it.
 
@@ -15,28 +15,28 @@ For each Beacon feature area: which toolset covers it, or the fallback when noth
 
 | Feature area | Status | Toolset | Gap and fallback |
 |---|---|---|---|
-| Level and actor editing | Partly covered | `SceneTools`, `ActorTools`, `PrimitiveTools`, `ObjectTools` | Placing, moving, tagging, parenting and deleting actors are covered. There is no tool to create a level: duplicate the template level with `AssetTools.duplicate` (F-002). |
+| Level and actor editing | Partly covered | `SceneTools`, `ActorTools`, `PrimitiveTools`, `ObjectTools` | Placing, moving, tagging, parenting and deleting actors are covered. There is no tool to create a level: duplicate the template level with `AssetTools.duplicate` (F-002). Pass all three parts to `set_actor_transform` (F-009), save levels with `beacon_mcp.py save` (F-015), and set collision in a graph (F-008). |
 | Landscape | Not covered | none | No landscape tool. The island is built from engine primitives, which the ticket allows. |
-| PCG | Covered | `PCGToolset`, `PCGSpatialToolset` | Graph authoring, parameters and execution. Not needed until #13. |
-| Blueprint graph authoring | Covered | `BlueprintTools` | Create Blueprints, variables, functions, events and dispatchers; write whole graphs with `write_graph_dsl`; compile. Components are added with `ActorTools.add_component`. |
-| Enhanced Input | Partly covered | `DataAssetTools`, `ObjectTools`, `BlueprintTools` | No dedicated tool. Input Actions and Mapping Contexts are data assets, so `DataAssetTools.create` plus `ObjectTools.set_properties` should author them. Fallback: editor Python. |
+| PCG | Covered | `PCGToolset`, `PCGSpatialToolset` | Graph authoring, parameters, seeds and execution. A spawner's mesh list is set with `ObjectTools`; the generated instances are read with editor Python (F-046, F-047). |
+| Blueprint graph authoring | Covered | `BlueprintTools` | Create Blueprints, variables, functions, events and dispatchers; write whole graphs with `write_graph_dsl`; compile. Components are added with `ActorTools.add_component`. Enhanced Input events and delegate binding need `create_node` and `connect_pins` (F-022, F-050); check pins with `get_node_infos` after a write (F-025) and remove replaced nodes with `graph_orphans.py` (F-055). |
+| Enhanced Input | Partly covered | `DataAssetTools`, `ObjectTools`, `BlueprintTools` | No dedicated tool. Input Actions and Mapping Contexts are data assets, and `DataAssetTools.create` plus `ObjectTools.set_properties` author them; triggers and modifiers were not set (F-021). |
 | Animation Blueprint | Partly covered | `BlueprintTools`, `SkeletalMeshTools`, `ControlRigTools` | Event graphs only; no tool edits an AnimGraph or state machine. Beacon reuses the template's `ABP_Unarmed`. Fallback: manual step. |
 | NavMesh | Partly covered | `SceneTools`, `ObjectTools`, `ConfigSettingsToolset` | No dedicated tool. Place a `NavMeshBoundsVolume` with `add_to_scene_from_class` and scale it. Fallback for a rebuild: console command through the Slate inspector. |
-| Behaviour Tree or StateTree | Not covered | `BehaviorTreeTools`, `StateTreeTools` (both inspect only) | Neither toolset can create an asset or add a node. Fallback: editor Python, which in 5.8 exposes `BehaviorTree.root_node` and `BTCompositeNode.children`. Task logic stays in Blueprint task classes made with `BlueprintTools`. |
-| EQS | Not covered | none | No EQS tool. `EnvQuery` is a data asset, so the asset can be created with `DataAssetTools.create`, but generators and tests are not exposed. Fallback: editor Python; if that cannot build the query options, a Blueprint generator class. |
+| Behaviour Tree or StateTree | Not covered | `BehaviorTreeTools`, `StateTreeTools` (both inspect only) | Neither toolset can create an asset or add a node. Editor Python builds the trees (`build_creature_ai.py`, F-017); task logic is in Blueprint task classes. |
+| EQS | Not covered | none | No EQS tool, and no scripted route: a query's parts can be created but not joined (F-030). Fallback: a manual step in the EQS editor; `ObjectTools` then reads the query and editor Python puts it in a tree (F-034). |
 | DataTables and DataAssets | Partly covered | `DataTableTools`, `DataAssetTools`, `ObjectTools`, `CurveTableTools` | Tables, rows and data asset instances are covered. There is no tool to create a row struct, and `DataTableTools.create` needs one. Beacon uses data assets whose class is a Blueprint made with `BlueprintTools`. |
 | UMG | Covered | `UMGToolSet`, `ObjectTools`, `BlueprintTools` | Widget Blueprints, widget trees, event binding and compile. Widget properties go through `ObjectTools`. |
-| Materials | Covered | `MaterialTools`, `MaterialInstanceTools` | Material graphs and material instances. |
-| Niagara | Covered | `NiagaraToolset_System`, `NiagaraToolset_Component`, `NiagaraToolset_Blueprint`, `NiagaraToolset_Assets`, `NiagaraToolset_Info` | Systems, emitters, modules and component overrides. Not needed until #12. |
-| Audio | Not covered | none | No tool imports or authors sounds. Blueprint graphs can play existing engine sounds. Fallback: editor Python for import. |
-| Lighting | Partly covered | `SceneTools`, `ObjectTools` | No dedicated tool. Lights are actors: place them with `SceneTools` and set their component properties with `ObjectTools`. |
-| Sequencer | Covered | `SequencerTools`, `SequencerKeyframingTools`, and five more Sequencer toolsets | Sequences, bindings, tracks and keys. Not needed until #14. |
-| SaveGame | Partly covered | `BlueprintTools` | No dedicated tool. A SaveGame class and the save and load graphs are ordinary Blueprint work. |
-| PIE control | Covered | `EditorAppToolset` | `StartPIE`, `StopPIE`, `IsPIERunning`. There is no input tool; drive the game with console commands through the Slate inspector. |
+| Materials | Covered | `MaterialTools`, `MaterialInstanceTools` | Material graphs and material instances. A reparented instance needs a forced save (F-041); a usage flag missing in a cooked build shows only in the packaged game's log (F-069). |
+| Niagara | Covered | `NiagaraToolset_System`, `NiagaraToolset_Component`, `NiagaraToolset_Blueprint`, `NiagaraToolset_Assets`, `NiagaraToolset_Info` | Systems from engine templates, emitters, modules and stack inputs (F-042). |
+| Audio | Not covered | none | No tool imports or authors sounds. Sounds are synthesised by a script and imported with editor Python (F-043). |
+| Lighting | Partly covered | `SceneTools`, `ObjectTools` | No dedicated tool. Lights are actors: place them with `SceneTools` and set their component properties with `ObjectTools` (F-032). The project lights dynamically, so there is no lighting build (F-065). |
+| Sequencer | Covered | `SequencerTools`, `SequencerKeyframingTools`, and five more Sequencer toolsets | Sequences, bindings, tracks and keys (F-048). Binding a camera also adds a Camera Cut track (F-049). |
+| SaveGame | Partly covered | `BlueprintTools` | No dedicated tool. A SaveGame class and the save and load graphs are ordinary Blueprint work (F-052). A file that is not a save crashes the engine on load (F-053). |
+| PIE control | Covered | `EditorAppToolset` | `StartPIE`, `StopPIE`, `IsPIERunning`. There is no input tool; drive the game with console commands through the Slate inspector, read state with editor Python, and turn off the background throttle for timing-sensitive runs (F-013, F-062). |
 | Log reading | Covered | `LogsToolset` | `GetLogEntries` filters by category and regular expression. |
-| Viewport screenshots | Covered | `EditorAppToolset`, `SlateInspectorToolset` | `CaptureViewport` for the level viewport, `CaptureEditorImage` and `Screenshot` for editor UI. |
-| Custom C++ tools | Partly covered | `PluginToolset`, `AssetTools` | `PluginToolset.CreatePlugin` scaffolds a plugin and `AssetTools.write_file` writes source, but nothing compiles it, and new tools need an editor restart. Fallback: build from the command line. |
-| Packaging | Not covered | none | No build or packaging tool. Fallback: run the engine's `RunUAT BuildCookRun` from a shell. |
+| Viewport screenshots | Covered | `EditorAppToolset`, `SlateInspectorToolset` | `CaptureViewport` renders the editor world even during PIE; `SlateInspectorToolset.Screenshot` of the viewport panel shows the game (F-014). |
+| Custom C++ tools | Partly covered | `PluginToolset`, `AssetTools` | `PluginToolset.CreatePlugin` scaffolds a plugin, but nothing scaffolds a project module or compiles code, and `AssetTools.write_file` refuses paths outside `Content/` and `Saved/` (F-057). Source is written and built from a shell, and the editor restarted; the function is then a tool (F-058). |
+| Packaging | Not covered | none | No build, cook or packaging tool. A cook can be started from the editor's Platforms menu through the Slate inspector and polled from the log (F-066). Packaging runs `RunUAT BuildCookRun` from a shell: `Tools/package.ps1`. |
 
 ## Tickets affected by a gap
 
@@ -50,7 +50,7 @@ For each Beacon feature area: which toolset covers it, or the fallback when noth
 
 ## Where building Beacon changed the picture
 
-The map above was written before anything was built. These are the places where tickets #4 to #17 proved it wrong or incomplete; the finding has the detail.
+The map above was written before anything was built. These are the places where tickets #4 to #18 proved it wrong or incomplete; the finding has the detail. The verdict on each area is in [evaluation-report.md](evaluation-report.md).
 
 | Feature area | What turned out | Finding |
 |---|---|---|
@@ -63,12 +63,14 @@ The map above was written before anything was built. These are the places where 
 | DataTables and DataAssets | Data assets with Blueprint-defined classes cover the need; DataTables stay out of reach without a row struct. | F-028 |
 | UMG | Covered, including layout and fonts through `ObjectTools`, button click events and widgets made at run time. | F-019, F-035 |
 | PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. The Slate inspector reads and clicks the game's own widgets. Frame rate and short timings come from editor Python. A whole night is started with level options through the console and its result polled from the log; the editor's background throttle has to be off for the result to mean anything. | F-013, F-014, F-027, F-037, F-045, F-051, F-056, F-061, F-062 |
-| Materials | Covered. Reparenting a material instance does not mark it unsaved, so it needs a forced save. | F-041 |
+| Materials | Covered. Reparenting a material instance does not mark it unsaved, so it needs a forced save. A usage flag the editor sets for itself was missing in the cooked build, and only the packaged game's log showed it. | F-041, F-069 |
 | Niagara | Covered for systems made from an engine template: emitters and modules are removed and stack inputs set. Results are too large to read without the script client. | F-042 |
 | Audio | No tool, as planned. Sounds are synthesised by a script and imported with editor Python. Nothing can confirm that they are heard. | F-043 |
 | PCG | Covered for the graph. The mesh lists of a spawner are set with `ObjectTools`, and the generated instances are read back with editor Python. | F-046, F-047 |
 | Sequencer | Covered. Binding a camera also adds a Camera Cut track that nothing reports. | F-048, F-049 |
 | SaveGame | Partly covered, as planned: ordinary Blueprint work. Blueprint cannot guard against a file that is not a save, which crashes the engine on load. | F-052, F-053 |
 | Custom C++ tools | Not covered up to the restart, covered after it. No tool scaffolds a project module or compiles one; the code is written and built from a shell and the editor restarted. The function is then a tool like any built-in one, with a schema taken from its comments, and the automation toolset runs its tests. `AssetTools.write_file` cannot write source: it refuses any path outside `Content/` and `Saved/`. The plugin scaffolding tool was not used. | F-057, F-058, F-059, F-060 |
+| Lighting | Covered in practice by the scene, actor and object tools; lights are switched from graphs at run time. The project lights dynamically, so there is no lighting build. A component change does not reach a light already placed. | F-032, F-033, F-065 |
+| Packaging | Not covered, as planned, but the cook can be started from the editor's Platforms menu through the Slate inspector and polled from the log. Package Project opens a native folder dialog and was not used; `Tools/package.ps1` packages from a shell. The packaged game has no MCP server. | F-065, F-066, F-067 |
 
-Five findings are about driving the MCP and belong to no feature area: `set_properties` takes its values as a JSON string (F-036), a Blueprint variable cannot be set from editor Python during PIE (F-040), a crashed editor restarts on a dialog that keeps the MCP server down (F-054), saving after reading graphs rewrites Blueprints that were only read (F-063), and reloading an unsaved package from editor Python opens a dialog that stops the server (F-064).
+Six findings are about driving the MCP and belong to no feature area: `set_properties` takes its values as a JSON string (F-036), a Blueprint variable cannot be set from editor Python during PIE (F-040), a crashed editor restarts on a dialog that keeps the MCP server down (F-054), saving after reading graphs rewrites Blueprints that were only read (F-063), reloading an unsaved package from editor Python opens a dialog that stops the server (F-064), and two agents driving one editor cut each other off (F-068).

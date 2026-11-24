@@ -179,3 +179,17 @@ Run after tickets #11 to #15, their review fixes and the removal of the unreacha
 | Input during the intro (#14) | With the shot slowed so that it was still playing afterwards, E, B, left mouse, Q, N, W and a look input were pressed: no turret, build menu closed, selection unchanged, no muzzle effect, still day, player at (-1500, 0), yaw 0. After Enter and the hand-off, E placed a turret. |
 | Combat effects (#12) | A Sentry killed a creature: `Flash` read 1.0, `NS_MuzzleFlash` and `NS_DeathBurst` components were seen, the creature was removed. The notice read "Sentry turret placed". |
 | Game over then Restart (#11, #15) | Lighthouse to 0: paused, "THE LIGHTHOUSE HAS FALLEN", "You reached night 0", `button "Restart"`. After Restart: play began with no menu and no intro, game time 6 s, day 1, 60 resources, lighthouse 100, no turrets, view on the character, and W moved the player to x = -386. The save file then held version 1, night 0, 60 resources, no turrets. |
+
+## #18 Package a Windows build
+
+Not play in editor: the packaged game runs outside the editor and has no MCP server. Measured on 2026-11-24 with the Development build from `pwsh Tools/package.ps1`. The automated nights were started from the command line and read from the game's own log. The menus were driven by a script that clicks and presses keys in the game window and captures it (finding F-067). The screenshots are in `Saved/BeaconScreenshots/packaged/`, which Git ignores.
+
+| Criterion | Evidence |
+|---|---|
+| Launches standalone and plays from main menu through a night to game over | Menu with only "Play" (no save). Play, Enter to skip the intro: HUD "Day 1 - night 1 falls in 42 s", "Resources 60". E twice placed two Sentries ("Sentry turret placed", resources 10). At nightfall the HUD read "Night 1", "Wave 2 / 3 - creatures left: 5", lighthouse 14 / 100; 15 s later "THE LIGHTHOUSE HAS FALLEN", "You reached night 1", a "Restart" button. Automated nights in the packaged game: `AutoNight=1` with six turrets gave `outcome=win lighthouse_health=100.0 kills=18 spawned=18`; with none, `outcome=loss lighthouse_health=0.0`. |
+| Save and continue | After New Game, `Packaged/Windows/Beacon/Saved/SaveGames/BeaconSave.sav` (2090 bytes) existed. After a relaunch the menu offered "Continue" and "New Game", and Continue opened day 1 with 60 resources. With `Resources` changed from 60 to 77 in the file, Continue showed "Resources 77", so it reads the save rather than starting fresh. Turrets restored from a save were not checked in the packaged build; #15 checked them in the editor. |
+| One documented command produces the build | `pwsh Tools/package.ps1` ([packaging.md](../agents/packaging.md)): exit 0, `Packaged/Windows/Beacon.exe`, 1.0 GB, in 100 s; 24 s rebuilt after a content change. |
+| Long-running operations recorded, with the pattern for any over the per-call limit | No lighting build exists (dynamic lighting only) and no tool compiles shaders (F-065). The cook was started through the MCP from the editor's Platforms menu and polled from the log: the click took 0.18 s and the cook 93 s (F-066). Packaging runs from a shell (F-066). |
+| Packaged output is git-ignored | `git check-ignore -v Packaged/Windows/Beacon.exe` matches `/Packaged/` in `.gitignore`. |
+| Fallbacks and failures recorded | F-065 to F-069. |
+| Clean log | The packaged game's log had no `Warning:` or `Error:` line in the three menu-driven runs, and none in the automated runs apart from the material warning that F-069 fixed. |

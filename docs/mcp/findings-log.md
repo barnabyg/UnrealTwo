@@ -601,3 +601,48 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** failed
 - **Fallback used:** none: the editor process was ended from a shell and started again
 - **Notes:** After `set_properties` had changed two data assets and changed them back for the checks in F-059, the packages were still marked unsaved, and an unsaved package makes `QUIT_EDITOR` wait on a save prompt. `unreal.EditorLoadingAndSavingUtils.reload_packages` on the two was meant to discard the changes. It opened a modal window titled "Message" and the server stopped answering: the call that typed the command never returned. The window's text could not be read, since every tool is inside the blocked process; the script's last log line was the list of unsaved packages. The editor was ended with `Stop-Process`. Its restore record, `Saved/Autosaves/PackageRestoreData.json`, listed only those two assets, so it was moved aside before the relaunch (F-054). To leave a test edit behind cleanly, either save the asset once the value is back, and check `git status` afterwards (F-063), or accept the prompt problem and end the editor process. Do not call `reload_packages` on an unsaved package.
+
+### F-065: there is no lighting build to run, and shader compilation needs no tool of its own
+
+- **Ticket:** #18
+- **Capability:** lighting, packaging
+- **Tool used:** none
+- **Outcome:** no tool
+- **Fallback used:** other MCP tool: the console command `RecompileShaders changed` through the Slate inspector
+- **Notes:** The project sets `r.AllowStaticLighting=False` and lights with Lumen, so there is nothing to bake and the Build menu's lighting build was not run. No tool compiles shaders or reports the shader compiler's queue. `RecompileShaders changed`, typed into the `Cmd` box, returned in 1.6 s ("No Shader changes found") and logs both of its result lines as `LogShaderCompilers: Warning:`, so a verify run that follows it reports two false problems. The shader work that matters happens inside the cook (F-066): the first cook compiled 594 shaders, with 66% of 5,759 queries served from the derived data cache, in 563 s of worker time spread over eight workers. That cook took 93 s in all, and a second cook with a warm cache took 22 s. Neither was a single tool call, so the 120 s per-call limit did not apply.
+
+### F-066: a cook can be started through the editor's menu; packaging runs from a shell
+
+- **Ticket:** #18
+- **Capability:** packaging
+- **Tool used:** `SlateInspectorToolset.Snapshot`, `Hover`, `Click` on the editor's Platforms menu; `LogsToolset.GetLogEntries` to poll
+- **Outcome:** worked with a workaround (the cook; packaging itself has no tool, see notes)
+- **Fallback used:** other MCP tool: the editor's Platforms menu through the Slate inspector, for the cook; none for the package, which runs from a shell (`Tools/package.ps1`)
+- **Notes:** No toolset builds, cooks or packages. The editor's toolbar has a **Platforms** button whose menu the Slate inspector reads: Quick Launch, Project Launcher, Cook Content, Package Project, Prepare For Debugging. The Cook Content and Package Project submenus open on `Hover`. Take a new snapshot after each step: a ref from the snapshot before the menu changed fails with "Could not resolve ref", and `Click` returns false. In the Cook Content submenu, clicking **Windows** under "Cook for" only selects the platform; clicking the submenu's own **Cook Content** row starts the cook. That click returned in 0.18 s. The editor runs `RunUAT BuildCookRun ... -cook -skipstage` in a separate process and copies its output into its own log as `UATHelper: Cooking (Windows): ...` lines, so the cook is polled with `GetLogEntries` and the pattern `UATHelper: Cooking.*ExitCode=`. Do not poll for `BUILD SUCCESSFUL`: the SDK check that runs first prints it too, 1 s after the click. The cook ended after 93 s: 650 packages, `ExitCode=0`, no warnings. Package Project was not clicked: its tooltip says it archives "to a user-selected directory", which is a native folder dialog, and a dialog in the editor process stops the server (F-054, F-064). So the build is `pwsh Tools/package.ps1`, which runs `BuildCookRun -build -cook -stage -pak -iostore -archive` into `Packaged/Windows`. With the editor open it built the game target in 73 s, cooked in 22 s and staged in 3 s: 100 s in all, 1.0 GB. Rebuilt after a content change it took 24 s. The game target's compile prints the same 29 engine `C4996` warnings and compiler-version notice as the editor build (docs/agents/verification.md), and nothing else. `-nocompileeditor -skipbuildeditor` keep it off the editor's modules, so it works with the editor running.
+
+### F-067: the packaged build plays, saves and continues; its top-level exe is a launcher
+
+- **Ticket:** #18
+- **Capability:** packaging, SaveGame
+- **Tool used:** none; the packaged game has no MCP server, since the plugin is editor-only
+- **Outcome:** no tool
+- **Fallback used:** none: the game was checked from its command line and its log, and its menus driven by Win32 input from a script (see notes)
+- **Notes:** `Packaged/Windows/Beacon.exe` starts `Beacon/Binaries/Win64/Beacon.exe` and exits at once, so stopping the process that a script started leaves the game running; stop `Beacon` by name. The level options of #17 work in the packaged game: `Beacon.exe "Lvl_Island?AutoNight=1?Layout=..."` played night 1 to a win with six turrets (18 of 18 killed, lighthouse 100) and with none to a loss (`outcome=loss lighthouse_health=0.0`), and wrote `BEACON_NIGHT_RESULT` to `Beacon/Saved/Logs/Beacon.log`. The packaged game keeps its saves in `Packaged/Windows/Beacon/Saved/SaveGames`, apart from the editor's. Claude Code's computer-use tool could not be granted a window of an executable that is not installed, so the menus were driven by a script that clicks at fractions of the window's client area, presses keys with `keybd_event` and captures the window. From the menu (Play only), a new game wrote the save at the start of day 1; two Sentries were placed with E, the night started, and the lighthouse fell during wave 2 with "THE LIGHTHOUSE HAS FALLEN / You reached night 1". After a relaunch the menu showed Continue and New Game. To show that Continue reads the file rather than starting fresh, the saved `Resources` was changed from 60 to 77 in the file; Continue then showed 77. Restoring turrets from a save was verified in the editor in #15 and not again in the packaged build.
+
+### F-068: two agents driving one editor cut each other off
+
+- **Ticket:** #18
+- **Capability:** agent workflow
+- **Tool used:** `SlateInspectorToolset`, through `Tools/mcp/beacon_mcp.py`
+- **Outcome:** failed
+- **Fallback used:** none: waited for the editor to come back, then carried on
+- **Notes:** While this ticket was clicking through the Platforms menu, another Claude Code session was using the same editor. The editor log shows its calls interleaved with this session's, each on its own MCP session: a `py` script, a log read, then `QUIT_EDITOR` typed into the `Cmd` box at 15:23:53. This session's next call was refused (`WinError 10061`). The editor came back 11 s later, relaunched by the other session, and this session's menu state was gone. Nothing in the protocol shows that another client is connected, and there is no lock, so two agents can each undo the other's work, stop PIE under it, or restart the editor. Give each agent its own editor on its own port (`-ModelContextProtocolPort`, as `verify-cpp.ps1` does), or let only one at a time near the editor.
+
+### F-069: a material usage flag that the editor sets for itself was missing from the cooked build
+
+- **Ticket:** #18
+- **Capability:** materials, packaging
+- **Tool used:** `ObjectTools.get_properties`, `set_properties`, `AssetTools.save_assets`, `is_dirty`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** One of three packaged runs logged "Material /Game/Beacon/Materials/MI_Rock.MI_Rock missing usage flag InstancedStaticMeshes! Default Material will be used in game." The PCG scatter (F-046) draws rocks and foliage as instanced meshes, and both material instances inherit from the template's `M_FlatCol`, whose `bUsedWithInstancedStaticMeshes` was false. The editor sets such a flag for itself when it first needs it and compiles the shaders, so play in editor never showed the problem; a cooked build cannot, and falls back to the default material. `set_properties` with `{"bUsedWithInstancedStaticMeshes": true}` on `M_FlatCol` marked it dirty, `save_assets` saved it (`is_dirty` then false, and `git status` showed the file), and three later packaged runs logged no warning. Read a packaged build's log once after any new use of a material: some problems exist only in a cooked build.
