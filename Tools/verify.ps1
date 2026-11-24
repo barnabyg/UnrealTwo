@@ -26,7 +26,8 @@ Invoke-Gate 'tests' { uv run --no-sync pytest @failFast }
 
 # The C++ gates need the engine and its compiler, which a hosted CI runner does not have.
 $engine = if ($env:UE_ROOT) { $env:UE_ROOT } else { 'C:/Program Files/Epic Games/UE_5.8' }
-if (Test-Path (Join-Path $engine 'Engine/Build/BatchFiles/Build.bat')) {
+# The path is put together as text: on Linux, Join-Path stops on a path whose drive does not exist.
+if (Test-Path -LiteralPath "$engine/Engine/Build/BatchFiles/Build.bat") {
     & (Join-Path $PSScriptRoot 'verify-cpp.ps1') -Engine $engine
     Write-Host 'verify: all gates passed'
 }
