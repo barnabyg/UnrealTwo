@@ -673,3 +673,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** Worked with a workaround
 - **Fallback used:** Blender authored the FBX files. Editor Python added an `Emitter` socket to each imported head and saved the meshes.
 - **Notes:** The aiming head stays at its existing pivot. `ApplyType` selects the mesh before setting its material tint. `ShotEffects` reads the socket's world location for the particle and sound and writes the shot time to the head material for its afterglow. In PIE the three sockets lay 63, 103 and 50 cm ahead of their respective pivots after rotation. A mixed night verified target alignment and matching shot and material timestamps on all three types.
+
+### F-073: attaching a visible night beam to the existing lighthouse spotlight
+
+- **Ticket:** Lighthouse art pass
+- **Capability:** Static mesh import, material authoring and Blueprint component editing
+- **Tool used:** `StaticMeshTools.import_file`, `TextureTools.import_file`, `BlueprintTools` and Editor Python through the Slate console
+- **Outcome:** Worked with a workaround
+- **Fallback used:** Editor Python attached the light-shaft mesh to the rotating spotlight and saved the existing island actor's external package.
+- **Notes:** Enabling child propagation on the existing `SwitchBeam` visibility call made the shaft follow the day/night switch. The same function sets `LanternPower` on the lens. After compilation, the component template reported `NoCollision` but the placed component still reported `BlockAllDynamic`. Setting the placed component's profile and saving the external package fixed it. On a fresh PIE level load the shaft reported `NoCollision`, had navigation disabled, and allowed simple and complex visibility traces through it.

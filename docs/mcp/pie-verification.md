@@ -229,3 +229,21 @@ To watch the mixed layout from this checkout on Windows with Unreal Engine 5.8 i
 ```powershell
 Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe 'Lvl_Island?AutoNight=3?Layout=Sentry,700,0,Sprayer,350,606,Sentry,-350,606,Sniper,-700,0,Sprayer,-350,-606,Sentry,350,-606' -windowed }
 ```
+
+## Lighthouse art and night beam
+
+Checked on Windows in Unreal PIE and the packaged Development build on 2026-11-24.
+
+| Check | Result |
+|---|---|
+| Daylight | From the west path the stone steps, arched keeper's door, red daymark, gallery railings and copper cupola were visible. The shaft and spotlight were off. |
+| Night sweep | From the same viewpoint and from the third-person camera, the warm shaft swept from the ribbed lens to the lit ground. The bright core feathered towards the edges. |
+| Day/night switch | Calling the game's beam switch on, off and on again changed the visibility of both the spotlight and the shaft together. The lens material's `LanternPower` read 1, 0 and 1. |
+| Collision | After reloading the island, the shaft had collision and navigation disabled. Both simple and complex visibility traces across the cone, 18 m from the lens, passed through. |
+| Standalone gameplay | The Windows cook reported zero warnings and errors. With no turrets, night 1 ended in a loss after seven creatures spawned and lighthouse health reached zero. The game log had no warnings or errors. |
+
+To see both lighting conditions, run this command in PowerShell on Windows with Unreal Engine 5.8 installed. Choose Play or Continue, skip the flyover with Enter if it appears, then step back along the entrance path and look up. Press N during the day and watch the beam sweep across the path.
+
+```powershell
+Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe -windowed }
+```
