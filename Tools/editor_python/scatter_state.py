@@ -27,8 +27,12 @@ def read_state() -> dict[str, object]:
     seed = None
     meshes: dict[str, list[list[int]]] = {}
     collision: dict[str, str] = {}
+    # Beacon has one scatter volume; with more, the seed and profiles reported are the last one's.
     for volume in unreal.GameplayStatics.get_all_actors_of_class(scatter_world(), unreal.PCGVolume):
-        seed = volume.get_component_by_class(unreal.PCGComponent).get_editor_property("seed")
+        pcg = volume.get_component_by_class(unreal.PCGComponent)
+        if pcg is None:
+            continue
+        seed = pcg.get_editor_property("seed")
         for component in volume.get_components_by_class(unreal.InstancedStaticMeshComponent):
             mesh = component.static_mesh.get_name() if component.static_mesh else "none"
             meshes.setdefault(mesh, []).extend(instances(component))

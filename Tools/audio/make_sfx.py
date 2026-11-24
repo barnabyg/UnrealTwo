@@ -15,6 +15,7 @@ import random
 import sys
 import wave
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 SAMPLE_RATE = 44100
@@ -53,9 +54,11 @@ def mix(first: list[float], second: list[float], second_level: float) -> list[fl
     return [a + b * second_level for a, b in zip(padded_first, padded_second, strict=True)]
 
 
-def finish(samples: list[float], level: float) -> list[float]:
+def normalise_and_fade(samples: list[float], level: float) -> list[float]:
     """Scale to a peak level and fade both edges to silence."""
-    peak = max(abs(sample) for sample in samples)
+    peak = max((abs(sample) for sample in samples), default=0.0)
+    if peak == 0.0:
+        raise ValueError("cannot normalise a silent sound")
     fade = int(EDGE_FADE_SECONDS * SAMPLE_RATE)
     last = len(samples) - 1
     return [
@@ -64,25 +67,38 @@ def finish(samples: list[float], level: float) -> list[float]:
     ]
 
 
+@dataclass(frozen=True)
+class Layer:
+    """One decaying part of a sound: a pitch sweep, or noise when no pitch is given."""
+
+    seconds: float
+    decay_rate: float
+    sweep_hz: tuple[float, float] | None = None
+    noise_seed: int = 0
+
+    def samples(self) -> list[float]:
+        raw = sweep(*self.sweep_hz, self.seconds) if self.sweep_hz else noise(self.seconds, self.noise_seed)
+        return decay(raw, self.decay_rate)
+
+
+def layered(tone: Layer, grit: Layer, grit_level: float, level: float) -> list[float]:
+    """A tone with a quieter layer of noise over its start."""
+    return normalise_and_fade(mix(tone.samples(), grit.samples(), grit_level), level)
+
+
 def shot() -> list[float]:
     """A short falling zap with a noise crack, for the player's weapon and the turrets."""
-    body = decay(sweep(900.0, 180.0, 0.14), 22.0)
-    crack = decay(noise(0.05, seed=1), 90.0)
-    return finish(mix(body, crack, 0.6), 0.8)
+    return layered(Layer(0.14, 22.0, sweep_hz=(900.0, 180.0)), Layer(0.05, 90.0, noise_seed=1), 0.6, 0.8)
 
 
 def hit() -> list[float]:
     """A dull thud, for a shot landing on a creature."""
-    body = decay(sweep(240.0, 90.0, 0.09), 35.0)
-    grit = decay(noise(0.03, seed=2), 120.0)
-    return finish(mix(body, grit, 0.4), 0.7)
+    return layered(Layer(0.09, 35.0, sweep_hz=(240.0, 90.0)), Layer(0.03, 120.0, noise_seed=2), 0.4, 0.7)
 
 
 def death() -> list[float]:
     """A longer falling tone over a burst of noise, for a creature dying."""
-    body = decay(sweep(420.0, 55.0, 0.45), 7.0)
-    burst = decay(noise(0.3, seed=3), 14.0)
-    return finish(mix(body, burst, 0.5), 0.9)
+    return layered(Layer(0.45, 7.0, sweep_hz=(420.0, 55.0)), Layer(0.3, 14.0, noise_seed=3), 0.5, 0.9)
 
 
 SOUNDS: dict[str, Callable[[], list[float]]] = {"SFX_Shot": shot, "SFX_Hit": hit, "SFX_Death": death}

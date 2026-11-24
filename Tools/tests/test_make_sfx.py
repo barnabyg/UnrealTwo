@@ -4,7 +4,7 @@ import wave
 from pathlib import Path
 
 import pytest
-from make_sfx import SAMPLE_RATE, SOUNDS, write_all, write_wav
+from make_sfx import SAMPLE_RATE, SOUNDS, normalise_and_fade, write_all, write_wav
 
 
 @pytest.mark.parametrize("name", sorted(SOUNDS))
@@ -46,3 +46,8 @@ def test_write_all_writes_one_file_per_sound(tmp_path: Path) -> None:
 
     assert sorted(path.name for path in written) == ["SFX_Death.wav", "SFX_Hit.wav", "SFX_Shot.wav"]
     assert all(path.stat().st_size > 1000 for path in written)
+
+
+def test_a_silent_sound_is_refused_instead_of_dividing_by_zero() -> None:
+    with pytest.raises(ValueError, match="silent"):
+        normalise_and_fade([0.0] * 500, 0.8)
