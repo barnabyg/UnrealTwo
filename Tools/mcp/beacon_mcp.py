@@ -11,9 +11,10 @@ Usage (run from the repo root, editor running):
   python Tools/mcp/beacon_mcp.py call <toolset> <tool> '<json-args>' [--png out.png]
   python Tools/mcp/beacon_mcp.py console "<console command>"
   python Tools/mcp/beacon_mcp.py py <script.py>
+  python Tools/mcp/beacon_mcp.py click "<button label>"
   python Tools/mcp/beacon_mcp.py logs "<regex>" [--max 40]
   python Tools/mcp/beacon_mcp.py save
-  python Tools/mcp/beacon_mcp.py verify --png out.png [--seconds 5]
+  python Tools/mcp/beacon_mcp.py verify --png out.png [--seconds 5] [--menu]
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ import re
 import sys
 import time
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,13 @@ EXPECTED_NOISE = (
     "is Licensed Technology under the UE EULA",
 )
 
+
+# The main menu button that starts a new game: "Play" until a save exists, "New Game" after.
+START_BUTTONS = ("Play", "New Game")
+# The key that skips the intro shot.
+SKIP_INTRO_KEY = "Enter"
+# Long enough to watch the whole intro if the skip is missed, with a slow editor.
+START_GAME_TIMEOUT_SECONDS = 40.0
 
 # The level viewport panel covers at least this share of the editor window.
 VIEWPORT_MIN_AREA = 0.4
@@ -203,6 +212,25 @@ class Client:
         image = self.call(SLATE, "Screenshot", {"ref": viewport_panel_ref(snapshot)})
         write_png(png, image["data"])
 
+    def ui_snapshot(self) -> str:
+        """The Slate widget tree, which includes the running game's own UMG widgets."""
+        snapshot: str = self.call(SLATE, "Snapshot", {"ref": "", "maxDepth": 60})
+        if not snapshot.strip():
+            raise ToolError("the editor reports no widgets: its window is probably minimised")
+        return snapshot
+
+    def click_ref(self, ref: str, label: str) -> None:
+        if not self.call(SLATE, "Click", {"ref": ref}):
+            raise ToolError(f'the button "{label}" did not take the click')
+
+    def click(self, label: str) -> None:
+        """Click a button of the running game or the editor by its label, or the start of it.
+
+        UMG widgets are Slate widgets, so the game's own buttons appear in the
+        snapshot while PIE runs and take a real click.
+        """
+        self.click_ref(widget_ref(self.ui_snapshot(), "button", label), label)
+
     def pie_state(self) -> dict[str, Any]:
         """Read the running game's state through Tools/editor_python/pie_state.py."""
         script = Path(__file__).resolve().parents[1] / "editor_python" / "pie_state.py"
@@ -252,11 +280,44 @@ class Client:
         self.console(f"py print('{marker}')")
         return marker
 
-    def verify(self, png: Path, seconds: float) -> list[str]:
-        """The verify loop: start PIE, wait, capture, stop PIE, return problem log lines."""
+    def start_game(self) -> None:
+        """From the main menu, start a new game, skip the intro shot and wait until play begins.
+
+        Each step is confirmed from the game's state: a click on a window that has
+        just come to the front can be swallowed, and a skip pressed before the shot
+        starts does nothing. A new game replaces the save in the play-in-editor slot.
+        """
+        deadline = time.monotonic() + START_GAME_TIMEOUT_SECONDS
+        skipped = False
+        while True:
+            state = self.pie_state()
+            if "error" in state:
+                raise ToolError(f"could not read the game state: {state['error']}")
+            snapshot = self.ui_snapshot()
+            step = next_start_step(state, menu_showing=start_button_showing(snapshot), skipped=skipped)
+            if step == "done":
+                return
+            if step == "click":
+                self.click_ref(start_button_ref(snapshot), "/".join(START_BUTTONS))
+            elif step == "skip":
+                self.console(f"Input.+key {SKIP_INTRO_KEY}")
+                self.console(f"Input.-key {SKIP_INTRO_KEY}")
+                skipped = True
+            if time.monotonic() >= deadline:
+                raise ToolError(f"the game did not start: still at the '{step}' step after the time allowed")
+            time.sleep(0.5)
+
+    def verify(self, png: Path, seconds: float, *, stay_on_menu: bool = False) -> list[str]:
+        """The verify loop: start PIE, start a game, wait, capture, stop PIE, return problem log lines.
+
+        The game opens on its main menu and then plays an intro shot, so the loop
+        starts a new game and skips the shot unless asked to stay on the menu.
+        """
         marker = self.mark_log()
         self.start_pie()
         try:
+            if not stay_on_menu:
+                self.start_game()
             time.sleep(seconds)
             self.capture_game(png)
         finally:
@@ -281,6 +342,71 @@ def viewport_panel_ref(snapshot: str) -> str:
         if covers_most and width < window_width:
             best = match.group(3)
     return best
+
+
+def widget_ref(snapshot: str, kind: str, label: str, *, exact: bool = False) -> str:
+    """Ref of the enabled widget of this kind with this label, or whose label starts with it.
+
+    An exact label wins over a longer one, so "Play" does not pick "Play in a new
+    window". Without an exact match there must be one enabled candidate: two are an
+    error, not a guess. With `exact`, longer labels are not considered at all.
+    """
+    enabled: dict[str, str] = {}
+    disabled: set[str] = set()
+    for line in snapshot.splitlines():
+        found = re.match(rf'\s*{re.escape(kind)} "(?P<label>[^"]*)"(?P<rest>.*)\[ref=(?P<ref>\w+)\]', line)
+        if not found:
+            continue
+        text = found.group("label")
+        if text != label and (exact or not text.startswith(label)):
+            continue
+        if "[disabled]" in found.group("rest"):
+            disabled.add(text)
+        else:
+            enabled.setdefault(text, found.group("ref"))
+    if label in enabled:
+        return enabled[label]
+    if len(enabled) == 1:
+        return next(iter(enabled.values()))
+    if len(enabled) > 1:
+        raise ToolError(f'more than one {kind} starts with "{label}": {sorted(enabled)}')
+    if disabled:
+        raise ToolError(f'the {kind} "{label}" is disabled')
+    raise ToolError(f'no {kind} labelled "{label}" is on screen')
+
+
+def next_start_step(state: dict[str, Any], *, menu_showing: bool, skipped: bool) -> str:
+    """What `start_game` should do next: "click" the menu, "skip" the intro, "wait" or stop as "done".
+
+    Between the intro and play there is a one-second blend in which neither the
+    menu nor the intro is up; that, like an intro already skipped, is a wait.
+    """
+    if state.get("started"):
+        return "done"
+    if state.get("intro_playing"):
+        return "wait" if skipped else "skip"
+    return "click" if menu_showing else "wait"
+
+
+def start_button_showing(snapshot: str) -> bool:
+    try:
+        start_button_ref(snapshot)
+    except ToolError:
+        return False
+    return True
+
+
+def start_button_ref(snapshot: str) -> str:
+    """Ref of the main menu button that starts a new game.
+
+    The button reads "Play" until a save exists and "New Game" after that.
+    """
+    for label in START_BUTTONS:
+        try:
+            return widget_ref(snapshot, "button", label, exact=True)
+        except ToolError:
+            continue
+    raise ToolError(f"the main menu is not showing: none of the buttons {list(START_BUTTONS)} is on screen")
 
 
 def write_png(png: Path, base64_data: str) -> None:
@@ -350,6 +476,8 @@ def build_parser() -> argparse.ArgumentParser:
     python = commands.add_parser("py", help="run an editor Python script")
     python.add_argument("script", type=Path)
     python.add_argument("--wait", type=float, default=1.0)
+    click = commands.add_parser("click", help="click a button of the running game or the editor")
+    click.add_argument("label", help="the start of the button's label")
     logs = commands.add_parser("logs", help="print matching Output Log lines")
     logs.add_argument("pattern")
     logs.add_argument("--max", type=int, default=40)
@@ -357,6 +485,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify = commands.add_parser("verify", help="start PIE, capture, stop PIE, report log problems")
     verify.add_argument("--png", type=Path, required=True)
     verify.add_argument("--seconds", type=float, default=5.0)
+    verify.add_argument("--menu", action="store_true", help="stay on the main menu instead of clicking Play")
     return parser
 
 
@@ -372,33 +501,41 @@ def run_call(client: Client, args: argparse.Namespace) -> None:
     print(json.dumps(strip_images(result), indent=1))
 
 
+def run_describe(client: Client, args: argparse.Namespace) -> None:
+    described = client.describe(args.toolset)
+    if args.json:
+        print(json.dumps(described, indent=1))
+    else:
+        print_signatures(described)
+
+
+def run_verify(client: Client, args: argparse.Namespace) -> int:
+    problems = client.verify(args.png, args.seconds, stay_on_menu=args.menu)
+    print_lines(problems)
+    print(f"screenshot: {args.png}  log problems: {len(problems)}")
+    return 1 if problems else 0
+
+
+def print_lines(lines: list[str]) -> None:
+    for line in lines:
+        print(line)
+
+
 def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
     client = Client()
-    if args.command == "describe":
-        described = client.describe(args.toolset)
-        if args.json:
-            print(json.dumps(described, indent=1))
-        else:
-            print_signatures(described)
-    elif args.command == "call":
-        run_call(client, args)
-    elif args.command == "console":
-        client.console(args.text)
-    elif args.command == "py":
-        for line in client.run_python(args.script, args.wait):
-            print(line)
-    elif args.command == "logs":
-        for line in client.logs(args.pattern, args.max):
-            print(line)
-    elif args.command == "save":
-        print(client.save_all())
-    elif args.command == "verify":
-        problems = client.verify(args.png, args.seconds)
-        for line in problems:
-            print(line)
-        print(f"screenshot: {args.png}  log problems: {len(problems)}")
-        return 1 if problems else 0
+    if args.command == "verify":
+        return run_verify(client, args)
+    actions: dict[str, Callable[[], None]] = {
+        "describe": lambda: run_describe(client, args),
+        "call": lambda: run_call(client, args),
+        "console": lambda: client.console(args.text),
+        "py": lambda: print_lines(client.run_python(args.script, args.wait)),
+        "click": lambda: client.click(args.label),
+        "logs": lambda: print_lines(client.logs(args.pattern, args.max)),
+        "save": lambda: print(client.save_all()),
+    }
+    actions[args.command]()
     return 0
 
 

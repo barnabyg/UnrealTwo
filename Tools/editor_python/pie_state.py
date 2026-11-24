@@ -56,9 +56,15 @@ def read_state() -> dict[str, object]:
         "pitch": round(rotation.pitch, 1),
         "falling": pawn.get_movement_component().is_falling(),
         "paused": unreal.GameplayStatics.is_game_paused(world),
+        "started": variable(mode, "bStarted", False),
+        "intro_playing": variable(mode, "bIntroPlaying", False),
+        "has_usable_save": variable(mode, "bHasUsableSave", False),
         "game_over": variable(mode, "bGameOver", False),
         "time": round(unreal.GameplayStatics.get_time_seconds(world), 1),
     }
+    camera = unreal.GameplayStatics.get_player_camera_manager(world, 0)
+    state["camera"] = vector(camera.get_camera_location())
+    state["view_target"] = controller.get_view_target().get_class().get_name()
     lighthouses = actors_of(world, "BP_Lighthouse")
     if lighthouses:
         state["lighthouse_health"] = variable(lighthouses[0], "Health")
@@ -91,6 +97,8 @@ def read_state() -> dict[str, object]:
         "text": variable(mode, "WaveText", ""),
     }
     state["turret_text"] = variable(pawn, "TurretText", "")
+    state["selected_turret"] = variable(pawn, "SelectedTurret", 0)
+    state["build_menu_open"] = variable(pawn, "bBuildMenuOpen", False)
     state["phase"] = {
         "night": variable(mode, "bIsNight", False),
         "night_number": variable(mode, "NightNumber", 0),

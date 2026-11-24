@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from beacon_mcp import find_image, strip_images, viewport_panel_ref
+import pytest
+from beacon_mcp import (
+    ToolError,
+    find_image,
+    next_start_step,
+    start_button_ref,
+    strip_images,
+    viewport_panel_ref,
+    widget_ref,
+)
 from gen_inventory import one_line, render
 
 IMAGE = {"mimeType": "image/png", "data": "A" * 400}
@@ -64,3 +73,95 @@ def test_viewport_panel_ref_picks_innermost_large_splitter_narrower_than_window(
 def test_viewport_panel_ref_falls_back_to_whole_window() -> None:
     assert viewport_panel_ref("nothing useful") == ""
     assert viewport_panel_ref('window "Editor" [pos=0,0 size=800,600] [ref=w1]') == ""
+
+
+GAME_UI = "\n".join(
+    [
+        'text "Build - choose a turret" [pos=604,498 size=409,43] [ref=x217]',
+        'button "Sentry  -  cost 25   (selected)" [pos=604,532 size=409,42] [ref=b264]',
+        'button "Sniper  -  cost 40" [disabled] [pos=604,565 size=409,42] [ref=b265]',
+        'button "Play" [pos=655,605 size=280,72] [ref=b250]',
+        'button "Play in a new window" [pos=10,10 size=20,20] [ref=b9]',
+    ]
+)
+
+
+def test_widget_ref_finds_a_button_by_the_start_of_its_label() -> None:
+    assert widget_ref(GAME_UI, "button", "Sentry") == "b264"
+    assert widget_ref(GAME_UI, "text", "Build") == "x217"
+
+
+def test_widget_ref_prefers_an_exact_label_over_a_longer_one() -> None:
+    reordered = "\n".join(reversed(GAME_UI.splitlines()))
+
+    assert widget_ref(reordered, "button", "Play") == "b250"
+
+
+def test_widget_ref_refuses_disabled_and_missing_widgets() -> None:
+    with pytest.raises(ToolError, match="disabled"):
+        widget_ref(GAME_UI, "button", "Sniper")
+    with pytest.raises(ToolError, match="no button"):
+        widget_ref(GAME_UI, "button", "Restart")
+
+
+def test_widget_ref_takes_an_enabled_match_over_a_disabled_one_with_the_same_start() -> None:
+    snapshot = "\n".join(
+        [
+            'button "Sniper  -  cost 40" [disabled] [pos=1,1 size=9,9] [ref=b1]',
+            'button "Sniper rifle" [pos=1,1 size=9,9] [ref=b2]',
+        ]
+    )
+
+    assert widget_ref(snapshot, "button", "Sniper") == "b2"
+
+
+def test_widget_ref_refuses_to_guess_between_two_enabled_matches() -> None:
+    with pytest.raises(ToolError, match="more than one"):
+        widget_ref(GAME_UI, "button", "Pla")
+
+
+def test_widget_ref_with_exact_ignores_longer_labels() -> None:
+    longer_only = 'button "Play in a new window" [pos=10,10 size=20,20] [ref=b9]'
+
+    with pytest.raises(ToolError, match="no button"):
+        widget_ref(longer_only, "button", "Play", exact=True)
+
+
+def test_start_button_ref_is_play_without_a_save_and_new_game_with_one() -> None:
+    with_save = "\n".join(
+        [
+            'button "Continue" [pos=655,560 size=280,72] [ref=b3]',
+            'button "New Game" [pos=655,690 size=280,72] [ref=b4]',
+            'button "Play in a new window" [pos=10,10 size=20,20] [ref=b9]',
+        ]
+    )
+
+    assert start_button_ref(GAME_UI) == "b250"
+    assert start_button_ref(with_save) == "b4"
+
+
+def test_start_button_ref_says_when_the_menu_is_not_showing() -> None:
+    with pytest.raises(ToolError, match="main menu"):
+        start_button_ref('button "Restart" [pos=1,1 size=9,9] [ref=b7]')
+
+
+def test_next_start_step_clicks_the_menu_until_the_click_takes() -> None:
+    on_menu = {"started": False, "intro_playing": False}
+
+    assert next_start_step(on_menu, menu_showing=True, skipped=False) == "click"
+
+
+def test_next_start_step_skips_the_intro_once_and_then_waits() -> None:
+    in_intro = {"started": False, "intro_playing": True}
+
+    assert next_start_step(in_intro, menu_showing=False, skipped=False) == "skip"
+    assert next_start_step(in_intro, menu_showing=False, skipped=True) == "wait"
+
+
+def test_next_start_step_waits_through_the_hand_off_and_stops_when_play_begins() -> None:
+    handing_off = {"started": False, "intro_playing": False}
+
+    assert next_start_step(handing_off, menu_showing=False, skipped=True) == "wait"
+    assert (
+        next_start_step({"started": True, "intro_playing": False}, menu_showing=False, skipped=True) == "done"
+    )

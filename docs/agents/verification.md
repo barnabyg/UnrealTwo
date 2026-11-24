@@ -13,7 +13,7 @@ It needs [uv](https://docs.astral.sh/uv/) and changes no tracked file. GitHub Ac
 | Dependencies locked | `uv lock --check` | `pyproject.toml` against `uv.lock` |
 | Formatting | `ruff format --check` | all Python in the repo |
 | Lint | `ruff check` | all Python in the repo |
-| Types | `mypy --strict` | `Tools/mcp`, `Tools/tests` |
+| Types | `mypy --strict` | `Tools/mcp`, `Tools/audio`, `Tools/tests` |
 | Tests | `pytest` (parallel, warnings are errors) | `Tools/tests` |
 
 ## Gates that do not apply

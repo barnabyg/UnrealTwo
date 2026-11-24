@@ -331,3 +331,202 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** manual step for the query, editor Python for the tree
 - **Notes:** This closes the gap left by F-030. A person made `EQS_NearestTurret` in the EQS editor: generator Actors Of Class `BP_Turret` within 10000 cm of the querier, and a Distance test with purpose Score and the Inverse Linear equation, so the nearest turret scores highest. Once the asset exists its parts can be read through the MCP at `EQS_NearestTurret:EnvQueryOption_0.EnvQueryGenerator_ActorsOfClass_0` and `...EnvQueryTest_Distance_0`, which is how the settings were confirmed. `build_creature_ai.py` puts a `BTTask_RunEQSQuery` in the Hunter's tree: the query and `SINGLE_RESULT` run mode go into the task's `eqs_request` struct, and the result into the `TargetActor` blackboard key. A Blueprint task then turns that target into a point to walk to. With no turret standing the query fails and the Selector falls through to the lighthouse plan. In PIE the Hunter attacked the nearer of two turrets first, then the other. The Blueprint task that used to choose the turret, `BTTask_FindTurret`, is deleted.
+
+### F-035: menus, buttons and a progress bar are built with the UMG toolset and the graph DSL
+
+- **Ticket:** #11
+- **Capability:** UMG
+- **Tool used:** `UMGToolSet.CreateWidgetBlueprint`, `AddWidget`, `RemoveWidget`, `ToggleWidgetAsVariable`, `BindToEventProperty`, `CompileWidgetBlueprint`, `ObjectTools.set_properties`, `BlueprintTools.write_graph_dsl`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `WBP_MainMenu`, `WBP_GameOver`, `WBP_BuildMenu` and `WBP_BuildEntry` are new, and `WBP_BeaconHUD` gained a `ProgressBar`. `BindToEventProperty` with `eventName: "OnClicked"`, the button's variable name and `propertyClass: /Script/UMG.Button` adds the click event; the DSL then writes its body as `(event OnClicked(PlayButton) ...)`, unlike Enhanced Input events (F-022). A widget that another widget creates is typed `UserWidget` at the `CreateWidget` output, so cast it before setting its variables. The build menu makes one `WBP_BuildEntry` per turret type in a `for` loop over the game mode's `TurretTypes` and adds each to a `VerticalBox` with `Widget|Panel|AddChild`. An entry disables its button with `Widget|SetIsEnabled` while the player's resources are below the type's cost; Slate draws a disabled button and its label dimmed with no further styling. Removing a text block that a graph still reads makes `CompileWidgetBlueprint` fail with "This blueprint (self) is not a TextBlock", and while the Widget Blueprint is in that state `find_node_types` on its graph lists only part of the other Blueprints' members. Rewrite the graph first.
+
+### F-036: set_properties takes its values as a JSON string and says nothing when given an object
+
+- **Ticket:** #11
+- **Capability:** agent workflow
+- **Tool used:** `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** The schema types `values` as a string. Sending a JSON object instead returns `false` for every call with no error text, and nothing is set. Encode the object first (`json.dumps`). A struct can be given in part: `{"font": {"size": 28}}` changes the size and keeps the typeface.
+
+### F-037: the Slate inspector sees and clicks the game's own widgets during PIE
+
+- **Ticket:** #11
+- **Capability:** PIE control
+- **Tool used:** `SlateInspectorToolset.Snapshot`, `Click`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** UMG widgets are Slate widgets, so a snapshot taken while PIE runs lists them: `button "Play" [pos=655,605 size=280,72] [ref=b250]`, each text block with its current text, and `progressbar`. `Click` on a button's ref presses it in the game, which is how the menu, the build menu and the restart were tested without a person. A disabled button is marked `[disabled]`; `Click` on it still returns true and does nothing. Refs change whenever a widget is rebuilt, so take a new snapshot before each click. `beacon_mcp.py click "<label>"` wraps this, and `verify` now clicks Play because the game opens on its menu. The HUD's live values are read the same way, from the snapshot's text lines.
+
+### F-038: two names the engine already uses broke the restart
+
+- **Ticket:** #11
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.add_event`, `write_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none: different names
+- **Notes:** A custom event named `RestartGame` on the game mode Blueprint was created without complaint, but `AGameMode` already has a function of that name. A call written from another Blueprint as `Class|BPBeaconGameMode|RestartGame` became the engine's `Game|RestartGame` node, and that Blueprint failed to compile with "Could not find a function named RestartGame in BP_BeaconGameMode_C". The event is `RestartRun`. Separately, the restart reopens the level with `Game|OpenLevel(byName)` and an option the game mode reads from `OptionsString` with `GameOptions|HasOption`. The option `restart` never arrived: the engine's travel code treats `?restart` as "reload the last URL" and the options string came back empty. The option is `SkipMenu`.
+
+### F-039: more DSL details found while writing the menus
+
+- **Ticket:** #11
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.write_graph_dsl`, `find_node_types`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** A boolean variable's node ids drop the `b` prefix: `bGameOver` is `Variables|Default|GetGameOver` inside its class and `Class|BPBeaconGameMode|GetGameOver` outside, although `read_graph_dsl` prints `(|GetbGameOver)`, which cannot be written back. A variable setter's pins are the value first and `self` second, so `(Class|WBPBuildEntry|SetTypeIndex entry i)` fails with "Could not connect pin"; write `:self entry :TypeIndex i`. `compile_blueprint` returns nothing on success.
+
+### F-040: a Blueprint variable cannot be set from editor Python during PIE unless it is instance editable
+
+- **Ticket:** #11
+- **Capability:** agent workflow
+- **Tool used:** none; editor Python through the console
+- **Outcome:** no tool
+- **Fallback used:** editor Python: call a Blueprint function instead
+- **Notes:** `set_editor_property("Resources", 30)` on the running game mode raises "Property 'Resources' ... cannot be edited on instances". Reading works. To put the game in a state for a test, call one of the Blueprint's functions with `call_method("AddResources", args=(-30,))`, or apply damage with `GameplayStatics.apply_damage`.
+
+### F-041: the hit flash is a material parameter, and reparenting a material instance does not mark it unsaved
+
+- **Ticket:** #12
+- **Capability:** materials
+- **Tool used:** `MaterialTools.create_material`, `add_expression`, `connect_expressions`, `connect_to_output`, `recompile`, `MaterialInstanceTools.set_parent`, `list_parameters`, `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python, for one save
+- **Notes:** `M_Creature` has a `Base Color` vector parameter, a `Flash` scalar (0 to 1), a `Flash Color` and a `Flash Glow`: base colour is a lerp from `Base Color` to `Flash Color` by `Flash`, and emissive is `Flash Color * Flash * Flash Glow`. Expression classes are `/Script/Engine.MaterialExpression<Name>`; a parameter's name and default are set with `ObjectTools` (`parameterName`, `defaultValue`), and a constant's value is its `r`. `MI_Creature` was reparented from the template's `M_FlatCol` and kept its `Base Color` override because the parameter name is the same. The creature sets `Flash` to 1 on damage with `Rendering|Material|SetScalarParameterValueonMaterials` and back to 0 after a `RetriggerableDelay` of 0.12 s. `set_parent` does not mark the instance's package dirty: `is_dirty` said false, `save_assets` returned true and wrote nothing, and `save_dirty.py` skipped it, while PIE showed the flash from the unsaved copy. `unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False)` wrote it. Check `git status` for every asset a ticket changed, not only the ones it created.
+
+### F-042: Niagara systems are made from engine templates and tuned through stack inputs
+
+- **Ticket:** #12
+- **Capability:** Niagara
+- **Tool used:** `NiagaraToolset_System.CreateNiagaraSystem`, `GetSystemSummary`, `GetEmitterTopology`, `GetEmitterInputValues`, `RemoveEmitter`, `RemoveModule`, `SetStackInputData`, `GetSystemCompileState`, `GetStackIssues`
+- **Outcome:** worked with a workaround
+- **Fallback used:** script client (`Tools/mcp/beacon_mcp.py`), to read the large results
+- **Notes:** A system needs a template. `NS_MuzzleFlash` comes from `/Niagara/DefaultAssets/Templates/Systems/DirectionalBurst` and `NS_DeathBurst` from `RadialBurst`; their ribbon emitters were removed with `RemoveEmitter`, and the module that fed the ribbon with `RemoveModule`. Every reference is the same struct: `system`, `emitterName`, `scriptName` (`EmitterUpdateScript`, `ParticleSpawnScript`, `ParticleUpdateScript`), `moduleName`, `rendererIndex` (-1 when unused) and `inputNameStack` (the input's name in a one-item list). A value is `{"struct": {"refPath": <type>}, "value": {...}}` with the type that `GetEmitterInputValues` reports: `/Script/Niagara.NiagaraInt32` and `NiagaraFloat` with `{"value": n}`, `/Script/CoreUObject.LinearColor`, `Vector2f` and `Vector3f` with their fields. Colour values above 1 make the sprites glow. Set this way: burst count, lifetime, sprite size, colour, cone axis and angle, gravity. Both systems compiled with no errors or warnings. `GetEmitterInputValues` for one template emitter is about 15,000 characters. The effects are spawned with `Niagara|SpawnSystematLocation`, which destroys the component when the system completes.
+
+### F-043: no tool authors audio; the sounds are synthesised and imported with editor Python
+
+- **Ticket:** #12
+- **Capability:** audio
+- **Tool used:** none exists
+- **Outcome:** no tool
+- **Fallback used:** editor Python: `Tools/editor_python/import_sfx.py`, after `Tools/audio/make_sfx.py`
+- **Notes:** `make_sfx.py` writes three mono 16-bit 44.1 kHz WAV files from sine sweeps and seeded noise using only the Python standard library: a shot (0.14 s), a hit (0.09 s) and a death (0.45 s). `import_sfx.py` imports them with `AssetImportTask` (`automated`, `replace_existing`, `save`) into `/Game/Beacon/Audio`; the three `SoundWave` assets read back through `ObjectTools` with those durations, one channel and 44100 Hz. Graphs play them with `Audio|PlaySoundatLocation`, which takes the asset path as a quoted string. The agent cannot hear the game, so what is verified is that the assets exist, the nodes are wired and the log stays clean. A person should listen once.
+
+### F-044: nodes in an existing graph can be swapped without rewriting the graph
+
+- **Ticket:** #12
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.find_nodes`, `get_node_infos`, `create_node`, `connect_pins`, `delete_node`, `write_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** The shot graphs read several outputs of `Collision|BreakHitResult`, which `read_graph_dsl` prints without saying which output is which (F-022), so writing the function again from its read-back was not safe. Each `DrawDebugLine` node was instead replaced in place: read its `connected_pins`, create a `CallFunction|ShotEffects` node, connect the same sources to `From`, `To` and `execute` and the same target to `then`, then delete the old node. `find_nodes` matches its `title` against the node's short title: `"Debug"` found the nodes, `"Draw Debug Line"` and `"Debug Line"` found none. Arithmetic on vectors reads back as `Math|Vector|vector*vector` but that id cannot be written ("does not exist"); write `(* vector 70.0)` and `(+ a b)`, which make the same nodes.
+
+### F-045: frame rate and live effect counts are read with editor Python, with the background throttle switched off
+
+- **Ticket:** #12
+- **Capability:** PIE control
+- **Tool used:** `ConfigSettingsToolset.GetSectionPropertyValues`, `SetSectionProperties`; editor Python
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python
+- **Notes:** No tool reports the frame rate. With the editor window in the background the editor runs at about 3 frames a second (see verify-loop.md), which hides any real cost. The setting is `bThrottleCPUWhenNotForeground` in container `Editor`, category `General`, section `EditorPerformanceSettings`. It was set to false for the measurement and back to true afterwards; it is a per-user preference and no tracked file changed. Frames per second is the change in `SystemLibrary.get_frame_count()` over the change in `GameplayStatics.get_real_time_seconds()` between two samples. Effects spawned at a location belong to the world settings actor, so `world.get_world_settings().get_components_by_class(unreal.NiagaraComponent)` lists the ones still alive. A dynamic material's parameter is read with `get_scalar_parameter_value("Flash")`.
+
+### F-046: the scatter graph is built node by node with the PCG toolset
+
+- **Ticket:** #13
+- **Capability:** PCG
+- **Tool used:** `PCGToolset.CreateGraph`, `ListNativeNodes`, `GetNativeNodeSchema`, `AddNode`, `UpdateNode`, `ConnectNodePins`, `DisconnectNodePins`, `GetNodeInfo`, `GetGraphStructure`, `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** other MCP tool: `ObjectTools`, for the mesh lists
+- **Notes:** `PCG_IslandScatter` is World Ray Hit Query, Surface Sampler, a height filter, a radius filter, a Difference against actors tagged `ScatterExclude`, then two branches: rocks (Select Points, Bounds Modifier, a second Difference, Self Pruning, Transform Points, Static Mesh Spawner) and foliage (Difference against the rock points, Transform Points, Static Mesh Spawner). `AddNode` takes the node's settings as a JSON string. An attribute selector is a plain string: `"$Position.Z"` for a point property, `"Radius"` for an attribute. A range filter's threshold is `{"bUseConstantThreshold": true, "attributeTypes": {"type": "Double", "doubleValue": -5}}`. Distance from the lighthouse is `Attribute Vector Op` with `operation: "Length"` on `$Position`, written to `Radius`. `GetNativeNodeSchema` lists that node's inputs as `InA` and `InB`, but with a one-input operation the pin is `In`, and `ConnectNodePins` fails on `InA`. `ConnectNodePins` returns the conversion nodes it adds by itself (`ToPoint_0`, `FilterDataByType_0`). The spawner's mesh list is not a node parameter: it is `meshEntries` on the selector object that `GetNodeInfo` names (`...:SpawnRocks.PCGStaticMeshSpawnerSettings_1.DefaultSelectorInstance`), set with `ObjectTools`. Each entry's `descriptor` takes `staticMesh`, `overrideMaterials` and `bodyInstance.collisionProfileName`; here the collision profile is applied (rocks `BlockAll`, foliage `NoCollision`), unlike on a placed component (F-008).
+
+### F-047: a graph instance is a PCG Volume, and its seed is a property of its PCG component
+
+- **Ticket:** #13
+- **Capability:** PCG
+- **Tool used:** `PCGToolset.SpawnGraphInstance`, `ExecuteGraphInstance`, `ListGraphInstances`, `ActorTools.set_actor_transform`, `add_tag`, `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python, to read the result: `Tools/editor_python/scatter_state.py`
+- **Notes:** `SpawnGraphInstance` places a PCG Volume with a 200 cm cube brush; scaling the actor to (30, 30, 4) covers the plateau, and the ray query and sampler work inside those bounds. The first `ExecuteGraphInstance` returned an empty issue list and the meshes appeared. The seed is `seed` on the component at `<volume path>.PCG Component`. Setting it with `ObjectTools` regenerates the scatter at once; an `ExecuteGraphInstance` straight after that fails with "Failed to call Execute on instance", and is not needed. No tool returns the generated instances, so `scatter_state.py` reads the volume's instanced mesh components and prints every instance position. Seed 42 gave the same sixteen rock positions twice; seed 7 shared none of them. The path from the west shore is a real actor, `Island_Path`, tagged `ScatterExclude`: the graph finds excluders by tag, so another clear area needs only a tagged actor. Subtracting the path after the rock footprint is set keeps a rock's body off the path: over eight seeds the nearest rock centre was 530 cm from the path's centre line, and the nearest foliage 252 cm, against a path half-width of 200 cm.
+
+### F-048: the intro shot is authored with the Sequencer toolsets
+
+- **Ticket:** #14
+- **Capability:** Sequencer
+- **Tool used:** `SceneTools.add_to_scene_from_class`, `SequencerTools.create_level_sequence`, `open_sequence`, `set_display_rate`, `set_playback_range`, `add_actors`, `get_tracks_on_binding`, `get_sections`, `set_section_range`, `set_section_completion_mode`, `SequencerKeyframingTools.get_channel_names`, `add_key_float`, `remove_key_at_frame`, `get_keys`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `LS_IntroFlyover` is nine seconds at 30 frames a second and animates a `CineCameraActor` placed in the level as `IntroCamera`. The camera comes in from the east, passes round the south side of the lighthouse and ends behind the player in the west: about half a circle, not a full one. `add_actors` binds a level actor into the sequence that is open in the Sequencer editor, so call `open_sequence` first; it returns a binding (`bindingId` plus `sequence`) and gives a camera a transform track with one section. Channels are `Location.X/Y/Z`, `Rotation.X/Y/Z` and `Scale.X/Y/Z`, where rotation X is roll, Y is pitch and Z is yaw. Six keys per channel were added with `add_key_float` and `"cubic"` interpolation. Yaw is keyed as one falling run (-158 to -360) so the camera turns one way round the lighthouse instead of unwinding. `set_section_completion_mode` takes `"KeepState"`, which leaves the camera on its last key when the sequence ends. To change a key, remove it with `remove_key_at_frame` and add it again.
+
+### F-049: Sequencer adds a Camera Cut track with a camera, and it fought the Blueprint for the view
+
+- **Ticket:** #14
+- **Capability:** Sequencer
+- **Tool used:** `SequencerTools.add_actors`, `get_tracks_on_sequence`, `remove_track_from_sequence`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** `add_actors` with a camera also adds a sequence-level `MovieSceneCameraCutTrack`, and its result does not mention it. The game mode sets the view itself: it cuts to `IntroCamera` when the shot starts and blends to the player with `Game|Player|SetViewTargetwithBlend` when it ends or is skipped. Watching the shot through worked. Skipping did not: the game mode started the blend and paused the sequence player, the pause evaluated the sequence once more, the cut track set the view back to the camera, and the game began with the view stuck over the sea. A per-frame trace (F-051) showed the view target go to the player and return to the camera one frame later. Removing the cut track with `remove_track_from_sequence` fixed it. If a sequence is meant to drive the view itself, keep the track and do not set the view target from a graph.
+
+### F-050: binding a delegate needs node tools, and the skip key lives on the controller
+
+- **Ticket:** #14
+- **Capability:** Blueprint graph authoring, Enhanced Input
+- **Tool used:** `BlueprintTools.create_node`, `connect_pins`, `list_compatible_event_functions`, `set_create_event_function`, `write_graph_dsl`, `DataAssetTools.create`
+- **Outcome:** worked with a workaround
+- **Fallback used:** other MCP tool: `create_node` and `connect_pins` instead of the DSL
+- **Notes:** The game mode creates the player with `Sequencer|Player|CreateLevelSequencePlayer` (bind both outputs: `(bind (actor player) ...)`), calls `Play`, and binds the player's `OnFinished` to its `EndIntro` event. The bind node is `Sequencer|Player|BindEventtoOnFinished`. Four other classes have an `OnFinished` delegate under the id `EventDispatchers|BindEventtoOnFinished`; that id made a node for a gameplay task, and passing `declaring_class` for the sequence player failed with "does not exist". The delegate comes from an `EventDispatchers|CreateEvent` node whose function is chosen with `set_create_event_function`. `EndIntro` does nothing unless the shot is playing, so the finish and the skip can both call it. The pawn's input is disabled during the shot, which also silences the pawn's input events, so `IA_SkipIntro` is handled in `BP_BeaconPlayerController`. It is mapped to Enter and the gamepad's right face button; only Enter was tested. A one-line widget, `WBP_IntroHint`, shows "Enter: skip" during the shot. Space was not used: `IMC_Beacon` has a higher priority than the template's context, so mapping Space there would take it away from Jump.
+
+### F-051: a per-frame trace in editor Python times short events
+
+- **Ticket:** #14
+- **Capability:** agent workflow
+- **Tool used:** none; editor Python through the console
+- **Outcome:** no tool
+- **Fallback used:** editor Python
+- **Notes:** Reading the game state through the console costs about three seconds a call, too slow to time a nine-second shot. A script registered `unreal.register_slate_post_tick_callback`, recorded the game time whenever the intro flag, the started flag or the view target changed, and sampled the camera once a second; a second script unregistered it and printed the rows. Keep the callback handle on the `unreal` module so the second script can find it. With the editor in the background the trace has one row every third of a second, which is the resolution of the times in the verification record.
+
+### F-052: saving is a SaveGame Blueprint and ordinary graphs
+
+- **Ticket:** #15
+- **Capability:** SaveGame
+- **Tool used:** `BlueprintTools.create`, `add_variable`, `add_object_variable`, `add_function_graph`, `add_function_param`, `write_graph_dsl`, `get_default_object`, `ObjectTools.set_properties`, `UMGToolSet.AddWidget`, `BindToEventProperty`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `BP_BeaconSave` has the parent `/Script/Engine.SaveGame` and five variables: `SaveVersion`, `NightNumber`, `Resources`, and two arrays made with `container_type: "ARRAY"`, `TurretTypeNames` (string) and `TurretTransforms` (Transform). The game mode's `SaveProgress` runs at the start of every day: `SaveGame|CreateSaveGameObject`, a cast, the setters, one `Utilities|Array|Add` per turret on the save object's array getters, then `SaveGame|SaveGametoSlot`. `TryLoadSave` accepts a save only if the slot exists, the object casts to `BP_BeaconSave` and its version is between 1 and the game mode's `CurrentSaveVersion`. `RestoreTurret` finds the turret type whose display name matches the saved name, so a save survives the type list being reordered; a name that no longer exists is skipped. Defaults such as the slot name and the version are set on the class default object. Lighthouse and turret health are not saved: the ticket lists night, resources and turrets. The save was read back for the checks by loading the slot in editor Python. `read_graph_dsl` prints the save object's setter as `Variables|Default|SetNightNumber` and the turret's `TypeName` getter as `Interchange|Node|GetTypeName`; both are the right nodes, which was confirmed by loading the slot in editor Python with `GameplayStatics.load_game_from_slot` and reading the five properties. To test a newer save, `CurrentSaveVersion` was set to 99 on the class default object for one run and back to 1.
+
+### F-053: LoadGameFromSlot crashes the engine on a file that is not a save
+
+- **Ticket:** #15
+- **Capability:** SaveGame
+- **Tool used:** none exists that can check a file before it is loaded
+- **Outcome:** no tool
+- **Fallback used:** none: C++ would close the gap and was not taken (see notes)
+- **Notes:** A save file that held 1120 bytes of plain text crashed the editor when the game loaded it: "Assertion failed ... UnrealNames.cpp ... FName's 1023 max length exceeded. Got 1936287859 characters". The engine treats a file without the `GVAS` tag as an old-format save and reads a string length from its first bytes. No Blueprint node can read a file's bytes to check the tag first (searched for file, JSON and load-from-memory nodes; only `Utilities|Paths|FileExists` exists). The other kinds of bad save are safe: an empty file, a save cut to half its length, a file of zeros and a save with a newer version all return nothing or fail the version check, and the game starts a new one. The cut and zeroed files each log one engine warning, "Failed to find object 'Class '". Because of the crash the menu no longer loads the save to decide whether to offer Continue; it only asks whether the slot exists, and loads when Continue is pressed. A foreign file then cannot crash the game at launch, and New Game replaces it. An unreadable save therefore still shows Continue, which falls back to a new game. Closing the gap needs a C++ check of the first four bytes, or a text save format. C++ is an allowed fallback, but it would end Beacon being a Blueprint-only project, the same cost that F-030 weighed, so it was left for a person to decide. The project owner accepted the gap on 2026-11-24.
+
+### F-054: after a crash the editor waits on a dialog and the MCP server never starts
+
+- **Ticket:** #15
+- **Capability:** agent workflow
+- **Tool used:** none; the server was down
+- **Outcome:** no tool
+- **Fallback used:** none: the restore record was moved aside from a shell and the editor started again
+- **Notes:** Relaunching the editor after the crash in F-053 left the process running with no MCP server: the health check was refused for several minutes and the log stopped at frame 0. `(Get-Process UnrealEditor).MainWindowTitle` read "Restore Packages", the modal dialog that offers to restore autosaved packages, which blocks start-up until someone answers it. The agent cannot click it, since every MCP tool lives inside the blocked process. The record of what to restore is `Saved/Autosaves/PackageRestoreData.json`; it listed one template Blueprint that nobody had edited (F-024). Renaming that file and starting the editor again went straight to the project. Read the file before moving it: if it lists real work, a person should answer the dialog. Delete a test save that crashes the game before relaunching, or the next PIE run crashes too.
+
+### F-055: rewriting an event with the DSL leaves its old nodes in the graph
+
+- **Ticket:** #11 (found during the review of #11 to #15)
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.write_graph_dsl`, `find_nodes`, `get_node_infos`, `delete_node`, `read_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** script client (`Tools/mcp/graph_orphans.py`)
+- **Notes:** F-018 says that writing an event again replaces its old chain. It does, by disconnecting the old chain from the event: the old nodes stay in the graph, wired to each other and to nothing that runs. `read_graph_dsl` starts from the entry points, so it does not show them, and the Blueprint compiles without a warning. #11 claimed the `PrintString` nodes were gone on the strength of the read-back; `find_nodes` with the title `Print` still found six of them, in the game mode's `Notify` and the creature's and turret's event graphs. None could run. Across five Blueprints 132 nodes were unreachable, 59 of the 91 in the creature's event graph. `graph_orphans.py` lists the nodes that no event, input action event or function entry reaches by exec links, plus the value nodes that only they read, and deletes them with `--delete`. `find_nodes` with `entry_points_only` does not return Enhanced Input action events, so the script decides what an entry point is from the pins: an exec output and no exec input. After the deletion every affected graph read back the same DSL as before, and a search of every graph of every Beacon Blueprint found no print or debug-draw node. Run the script after rewriting a graph.
+
+### F-056: a minimised editor hides every widget, and the first click after it comes back can be lost
+
+- **Ticket:** #11 (found during the final checks of #11 to #15)
+- **Capability:** PIE control
+- **Tool used:** `SlateInspectorToolset.Snapshot`, `Windows`, `Click`
+- **Outcome:** worked with a workaround
+- **Fallback used:** script client (`Tools/mcp/beacon_mcp.py`)
+- **Notes:** While the editor's window is minimised the server still answers, but `Windows` with `action: "list"` returns an empty list and `Snapshot` an empty string, so the console box cannot be found and nothing can be typed, clicked or captured. The other toolsets keep working: graphs were searched, edited, compiled and saved with the window minimised. The client now reports an empty snapshot as a minimised window. After the window was restored, the first `verify` run failed: `Click` on the menu's button returned true and the game stayed on the menu. The next run passed, as did a repeat of the same case, so the click that brought the window to the front was probably swallowed. `start_game` no longer presses the button once and assumes: it reads the game state, clicks while the menu is up, presses the skip key only once the intro is playing, and waits through the hand-off. It also survives a skip that arrives too early, since the intro then plays out inside the time allowed.
+

@@ -54,4 +54,5 @@ A clean start has no errors. These lines are expected and need no action:
 - There is no authentication. The server is loopback-only by default (`[HTTPServer.Listeners] DefaultBindAddress=127.0.0.1`), so don't widen it or add allowed origins.
 - Tool calls run one at a time on the game thread. Claude Code gives up on a single call after about 120 s.
 - If `list_toolsets` only returns `AgentSkillToolset`, the toolset plugins aren't enabled.
+- After an editor crash, the next launch can stop on a "Restore Packages" dialog. The MCP server does not start until someone answers it, so the health check is refused while the process runs. `(Get-Process UnrealEditor).MainWindowTitle` shows the dialog's title. See finding F-054 in `docs/mcp/findings-log.md` for how to get past it.
 - A second editor needs another port (`-ModelContextProtocolPort=8001`) and a second `.mcp.json` entry.

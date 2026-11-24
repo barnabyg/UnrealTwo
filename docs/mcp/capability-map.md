@@ -50,16 +50,24 @@ For each Beacon feature area: which toolset covers it, or the fallback when noth
 
 ## Where building Beacon changed the picture
 
-The map above was written before anything was built. These are the places where tickets #4 to #10 proved it wrong or incomplete; the finding has the detail.
+The map above was written before anything was built. These are the places where tickets #4 to #15 proved it wrong or incomplete; the finding has the detail.
 
 | Feature area | What turned out | Finding |
 |---|---|---|
 | Level and actor editing | Saving is the weak point: `save_assets` on a map skips changed actors unless the map file itself is dirty, and `set_actor_transform` resets a scale it was not given. Collision settings cannot be changed with `ObjectTools`. | F-008, F-009, F-015 |
-| Blueprint graph authoring | Works for almost everything through the graph DSL. It cannot write Enhanced Input action events, drops positional arguments to a Blueprint's own functions, and `read_graph_dsl` marks the Blueprint dirty. | F-012, F-018, F-022, F-024, F-025, F-029 |
+| Blueprint graph authoring | Works for almost everything through the graph DSL. It cannot write Enhanced Input action events, drops positional arguments to a Blueprint's own functions, and `read_graph_dsl` marks the Blueprint dirty. Rewriting an event leaves its old nodes in the graph, unreachable. | F-012, F-018, F-022, F-024, F-025, F-029, F-039, F-044, F-055 |
 | Enhanced Input | Covered in practice by `DataAssetTools` and `ObjectTools`, apart from triggers and modifiers. | F-021 |
 | NavMesh | Covered in practice by scene and settings tools plus one console command. | F-016 |
 | Behaviour Tree | Editor Python can build a whole tree; the MCP's inspect tools then confirm it. | F-017 |
 | EQS | No scripted route to author a query. A person makes it in the EQS editor; editor Python can then put a Run EQS Query task in a tree, and `ObjectTools` can read the query's settings back. | F-030, F-034 |
 | DataTables and DataAssets | Data assets with Blueprint-defined classes cover the need; DataTables stay out of reach without a row struct. | F-028 |
-| UMG | Covered, including layout and fonts through `ObjectTools`. | F-019 |
-| PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. | F-013, F-014, F-027 |
+| UMG | Covered, including layout and fonts through `ObjectTools`, button click events and widgets made at run time. | F-019, F-035 |
+| PIE control, screenshots | PIE start and stop are tools. Input, game state and a picture of the running game all need workarounds. The Slate inspector reads and clicks the game's own widgets. Frame rate and short timings come from editor Python. | F-013, F-014, F-027, F-037, F-045, F-051, F-056 |
+| Materials | Covered. Reparenting a material instance does not mark it unsaved, so it needs a forced save. | F-041 |
+| Niagara | Covered for systems made from an engine template: emitters and modules are removed and stack inputs set. Results are too large to read without the script client. | F-042 |
+| Audio | No tool, as planned. Sounds are synthesised by a script and imported with editor Python. Nothing can confirm that they are heard. | F-043 |
+| PCG | Covered for the graph. The mesh lists of a spawner are set with `ObjectTools`, and the generated instances are read back with editor Python. | F-046, F-047 |
+| Sequencer | Covered. Binding a camera also adds a Camera Cut track that nothing reports. | F-048, F-049 |
+| SaveGame | Partly covered, as planned: ordinary Blueprint work. Blueprint cannot guard against a file that is not a save, which crashes the engine on load. | F-052, F-053 |
+
+Three findings are about driving the MCP and belong to no feature area: `set_properties` takes its values as a JSON string (F-036), a Blueprint variable cannot be set from editor Python during PIE (F-040), and a crashed editor restarts on a dialog that keeps the MCP server down (F-054).
