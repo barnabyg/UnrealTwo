@@ -212,3 +212,20 @@ Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITC
 ```
 
 Choose Play or New Game, skip the flyover with Enter and walk to the shore to see the grass, stone, rippled sand and moving water. Press N for the first night. Watch for the Shambler's spiral shell in wave one, the smaller Runner in wave two and the Hunter's luminous lure in wave three.
+
+## Turret art pass
+
+Checked in Unreal PIE and the Windows Development build on 2026-11-24.
+
+| Check | Result |
+|---|---|
+| Placement and orientation | The Sentry, Sniper and Sprayer selected the Fresnel, split-prism and three-emitter meshes respectively. Each used one material slot on the rotating head. The pedestal stayed on the ground and the head pivot stayed 85 cm above it. |
+| Day and night readability | Captured the same lineup in both lighting conditions. At night the large amber disk, narrow blue stripe and triangular cluster of green lights distinguish the types. |
+| Live tracking and firing | During night 3, every type faced a live target and fired. The material's `FlashStart` matched the turret's most recent firing time within 0.04 s on each type. |
+| Mixed night 3 | Both runs placed three Sentries, one Sniper and two Sprayers and spawned 40 creatures. PIE defeated all 40 with lighthouse health at 20. The packaged game defeated 38 before the lighthouse fell. Both runtime logs were clear of warnings and errors. The Windows cook reported zero warnings and errors. |
+
+To watch the mixed layout from this checkout on Windows with Unreal Engine 5.8 installed, run the following command in PowerShell. It packages the current assets and opens directly into night 3. The turrets should swivel towards approaching creatures, brighten briefly when firing and flash at the front of each head.
+
+```powershell
+Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe 'Lvl_Island?AutoNight=3?Layout=Sentry,700,0,Sprayer,350,606,Sentry,-350,606,Sniper,-700,0,Sprayer,-350,-606,Sentry,350,-606' -windowed }
+```

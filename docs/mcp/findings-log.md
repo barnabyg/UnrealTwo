@@ -664,3 +664,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** Worked with a workaround
 - **Fallback used:** Editor Python to update and verify the generated volume's mesh components
 - **Notes:** Iterating the weighted selector's `mesh_entries` and editing its nested descriptors changed copies. Writing a new list of the edited entries back to the selector updated the graph. After flushing the PCG cache and regenerating the volume, its components contained 6 shale outcrops and 10 granite boulders with `BlockAll`, and 69 marram tufts with `NoCollision`. Save both the graph and the volume's external actor package to preserve the result on reopening the level.
+
+### F-072: placing turret effects at a socket on the selected mesh
+
+- **Ticket:** Turret art pass
+- **Capability:** Static meshes, materials and Blueprint graphs
+- **Tool used:** `StaticMeshTools.import_file`, `TextureTools.import_file`, `BlueprintTools.add_object_variable`, `create_node`, `connect_pins`, `set_pin_value` and `compile_blueprint`
+- **Outcome:** Worked with a workaround
+- **Fallback used:** Blender authored the FBX files. Editor Python added an `Emitter` socket to each imported head and saved the meshes.
+- **Notes:** The aiming head stays at its existing pivot. `ApplyType` selects the mesh before setting its material tint. `ShotEffects` reads the socket's world location for the particle and sound and writes the shot time to the head material for its afterglow. In PIE the three sockets lay 63, 103 and 50 cm ahead of their respective pivots after rotation. A mixed night verified target alignment and matching shot and material timestamps on all three types.
