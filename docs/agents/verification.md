@@ -16,26 +16,27 @@ It needs [uv](https://docs.astral.sh/uv/) and changes no tracked file. GitHub Ac
 | Types | `mypy --strict` | `Tools/mcp`, `Tools/audio`, `Tools/tests` | yes |
 | Tests | `pytest` (parallel, warnings are errors) | `Tools/tests` | yes |
 | Formatting (C++) | `clang-format --dry-run --Werror` with `.clang-format` | `Source/`, C++ and C# | no |
-| Build (C++) | Unreal Build Tool, `BeaconEditor Win64 Development` | `Source/`; a warning in it fails the gate | no |
+| Build (C++) | Unreal Build Tool, `BeaconEditor Win64 Development` | `Source/`; any warning fails the gate, apart from the exception below | no |
 | Tests (C++) | Unreal automation tests under `Beacon.`, in a windowless editor | `Source/BeaconEditor/Private/Tests`; a test that passes with a warning fails the gate | no |
 
 ## The C++ gates run only where the engine is
 
 The three C++ gates are in `Tools/verify-cpp.ps1`. `verify.ps1` runs them when it finds Unreal Engine 5.8 at `C:\Program Files\Epic Games\UE_5.8`, or at `$env:UE_ROOT`, and prints that it skipped them otherwise. A GitHub-hosted runner has neither the engine nor its compiler, so **CI does not cover them: run the canonical command locally before pushing a change under `Source/`**. Review this if the project gets a self-hosted runner with the engine installed.
 
-- The build gate does nothing when the binaries are current, which is the usual case and works with the editor open. When it has something to compile, the editor must be closed: Live Coding holds the build lock while it runs.
+- The build gate compiles nothing when the binaries are current, which is the usual case and works with the editor open; it then prints "up to date: nothing was compiled". The compiler only prints a warning when it compiles the file, so an up-to-date run proves nothing about warnings: the gate that counts is the one that follows a change under `Source/`. When there is something to compile, the editor must be closed, because it has the modules' DLLs loaded and Live Coding holds the build lock.
 - The tests gate starts a second editor with no window (`-nullrhi`, MCP port 8017), so it also works with the editor open. It takes about 40 seconds.
 - `clang-format` is taken from `PATH`, or from Visual Studio's "C++ Clang tools for Windows" component. It is not pinned: a different version can format differently. Version 22.1.3 formatted the current source. Pinning it through `uv` would also let CI run this gate.
 
 ## Exceptions
 
-- **`C4996` deprecation warnings from engine headers.** Compiling the shared precompiled header with MSVC 14.51 prints 29 of them, all in Epic's headers (for example `UObject/Class.h`), along with the notice "Visual Studio compiler 14.51 is not a preferred version". UE 5.8 prefers MSVC up to 14.50. They appear only when the precompiled header is rebuilt, and they are why the build cannot use `-WarningsAsErrors`: with it the engine's own header fails. The build gate writes compiler output to `Saved/Logs/verify-build.log` and fails on any warning whose path is under this repo's `Source/`, so the project's own code is held to zero warnings. Review this when MSVC 14.50 is installed beside 14.51 or the engine is updated.
+- **`C4996` deprecation warnings from engine headers.** Compiling the shared precompiled header with MSVC 14.51 prints 29 of them, all in Epic's headers (for example `UObject/Class.h`), along with the notice "Visual Studio compiler 14.51 is not a preferred version". UE 5.8 prefers MSVC up to 14.50. They appear only when the precompiled header is rebuilt, and they are why the build cannot use `-WarningsAsErrors`: with it the engine's own header fails. The build gate writes the build's output to `Saved/Logs/verify-build.log` and fails on every warning in it except these two: a `C4996` whose file is under the engine's folder, and that notice. Review this when MSVC 14.50 is installed beside 14.51 or the engine is updated.
 
 ## Gates that do not apply, or are not set up
 
 - **Types for `Tools/editor_python`.** Those scripts run inside the editor's interpreter and import `unreal`, which exists only there. They are formatted and linted but not type checked. Review this if Epic publishes type stubs that can be installed outside the editor.
 - **Static bug analysis for Python.** Ruff's `B`, `S`, `PL` and `RUF` rule sets cover it.
-- **Static bug analysis for C++. Not set up.** Unreal Build Tool can run MSVC's analyser (`-StaticAnalyzer=VisualCpp`), but it has not been tried on this project. The compiler's warnings are the only analysis the C++ gets.
+- **Static bug analysis for C++ is a manual check, not a gate.** Unreal Build Tool runs MSVC's analyser when the build command is given `-StaticAnalyzer=VisualCpp`. On 2026-11-24 it analysed every file under `Source/` in 90 seconds and reported nothing. It is not in the script because an analysis run invalidates the ordinary build: the next build compiles and links everything again, which fails while the editor is open and would make every verify run a full rebuild. Run it by hand, with the editor closed, after a substantial change to the C++, and run the ordinary build afterwards. Review this if a later engine version keeps the two builds apart.
+- **Lint for C++.** There is no separate linter; the compiler's warnings and the analyser above are what the C++ gets. `clang-tidy` ships with Visual Studio but needs a compilation database that this project does not generate.
 - **Vulnerability and package checks.** The tooling has no runtime dependencies, and the C++ depends only on the engine. The development tools are pinned in `uv.lock`.
 - **Game build and packaging.** The build gate compiles the editor target. The game target is first built when the game is packaged, which arrives with #18.
 

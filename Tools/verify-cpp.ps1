@@ -17,8 +17,10 @@ function Find-ClangFormat {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     if (Test-Path $vswhere) {
         $install = & $vswhere -latest -products * -property installationPath
-        $bundled = Join-Path $install 'VC/Tools/Llvm/x64/bin/clang-format.exe'
-        if (Test-Path $bundled) { return $bundled }
+        if ($install) {
+            $bundled = Join-Path $install 'VC/Tools/Llvm/x64/bin/clang-format.exe'
+            if (Test-Path $bundled) { return $bundled }
+        }
     }
     throw 'clang-format not found: put it on PATH or add "C++ Clang tools for Windows" to Visual Studio'
 }
@@ -28,23 +30,33 @@ $sources = Get-ChildItem (Join-Path $repo 'Source') -Recurse -File -Include *.cp
 & (Find-ClangFormat) --dry-run --Werror @($sources.FullName)
 if ($LASTEXITCODE -ne 0) { throw 'format (C++) failed' }
 
-# The compiler's output goes to a file. A warning in Beacon's own source fails the gate.
-# Warnings in engine headers are not ours to fix; docs/agents/verification.md says which
-# are expected and why.
-Write-Host '== build (C++)'
-$buildLog = Join-Path $logs 'verify-build.log'
-& (Join-Path $Engine 'Engine/Build/BatchFiles/Build.bat') BeaconEditor Win64 Development `
-    "-Project=$project" -WaitMutex -NoHotReloadFromIDE *> $buildLog
-if ($LASTEXITCODE -ne 0) {
-    Get-Content $buildLog -Tail 40 | Write-Host
-    throw "build (C++) failed: see $buildLog. The editor must be closed if the build has to relink."
+# Runs Unreal Build Tool on the editor target with its output sent to a file. Any warning in
+# it fails the gate, apart from the two that docs/agents/verification.md documents: C4996
+# raised inside the engine's own headers, and the notice that the compiler is newer than
+# the engine prefers.
+function Invoke-BuildGate([string]$Name, [string]$LogName) {
+    Write-Host "== $Name"
+    $log = Join-Path $logs $LogName
+    & (Join-Path $Engine 'Engine/Build/BatchFiles/Build.bat') BeaconEditor Win64 Development `
+        "-Project=$project" -WaitMutex -NoHotReloadFromIDE *> $log
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $log -Tail 40 | Write-Host
+        throw "$Name failed: see $log. The editor must be closed when there is something to compile."
+    }
+    $engineHeader = '^' + [regex]::Escape((Resolve-Path $Engine).Path) + '.*: warning C4996:'
+    $warnings = @(Select-String -Path $log -Pattern '\bwarning\b' | ForEach-Object Line |
+            Where-Object { $_ -notmatch $engineHeader -and $_ -notmatch 'is not a preferred version' })
+    if ($warnings) {
+        $warnings | Write-Host
+        throw "$Name failed: $($warnings.Count) warning(s)"
+    }
+    if (Select-String -Path $log -SimpleMatch -Pattern 'Target is up to date' -Quiet) {
+        # Warnings are printed when a file is compiled, so an up-to-date target shows none either way.
+        Write-Host 'up to date: nothing was compiled'
+    }
 }
-$ownWarnings = @(Select-String -Path $buildLog -SimpleMatch -Pattern (Join-Path $repo 'Source') |
-        Where-Object { $_.Line -match '\bwarning\b' })
-if ($ownWarnings) {
-    $ownWarnings | ForEach-Object { Write-Host $_.Line }
-    throw "build (C++) failed: $($ownWarnings.Count) warning(s) in Beacon's source"
-}
+
+Invoke-BuildGate 'build (C++)' 'verify-build.log'
 
 # A second, windowless editor runs the tests, so this works while the editor is open.
 # It gets its own MCP port because the open editor holds the usual one.
