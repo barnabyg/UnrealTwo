@@ -691,3 +691,12 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** Worked
 - **Fallback used:** None
 - **Notes:** Each of the nine `DA_Wave_N*_*` assets supplies its own `SpawnInterval` in seconds. Setting each interval to 75% of its previous value increased the within-wave spawn rate by one third. To measure the actual spacing in PIE, sample the game mode's `SpawnedInWave` each frame and record game time when it increments within the same `WaveIndex`.
+
+### F-075: one quit button shared by three menus
+
+- **Ticket:** Player exit control
+- **Capability:** UMG, Blueprint graphs and PIE control
+- **Tool used:** `UMGToolSet`, `ObjectTools`, `BlueprintTools` and `SlateInspectorToolset`
+- **Outcome:** Worked
+- **Fallback used:** Win32 input for the packaged build, as in F-067.
+- **Notes:** Each menu embeds `WBP_QuitButton`. Its button's `OnClicked` calls `Game|QuitGame`. A Slate click ended PIE from each menu, including the paused game-over screen. In the packaged build a main-menu click went through `UGameEngine::HandleExitCommand` and the game process exited with status 0.

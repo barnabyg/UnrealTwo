@@ -263,3 +263,15 @@ To watch the same night on Windows with Unreal Engine 5.8 installed, run the com
 ```powershell
 Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe 'Lvl_Island?AutoNight=3?Layout=Sentry,700,0,Sniper,350,606,Sentry,-350,606,Sniper,-700,0,Sentry,-350,-606,Sniper,350,-606' -windowed }
 ```
+
+## Player exit control
+
+On 2026-11-24, clicking **Quit to Desktop** ended PIE from the main menu, the build menu during night 1 and the paused game-over screen. During day 1, pressing **B** opened the build menu and pressing it again returned to play. The HUD showed **B: build / quit**. These runs logged no warnings or errors.
+
+The Windows Development cook reported zero warnings and errors. Clicking **Quit to Desktop** on the packaged main menu closed the game process with exit code 0.
+
+To test with Unreal Engine 5.8 and the Windows C++ build tools installed, run this command in PowerShell. Choose **Play** or **Continue**, press **Enter** if the intro is playing, then press **B** and choose **Quit to Desktop**. The game window should close.
+
+```powershell
+Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe -windowed }
+```
