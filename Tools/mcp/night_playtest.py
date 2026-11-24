@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -87,9 +88,13 @@ def parse_layout(text: str) -> list[Turret]:
         if not re.fullmatch(r"\w+", name):
             raise ValueError(f'"{name}" is not a turret type name')
         try:
-            turrets.append(Turret(name, float(x), float(y)))
+            position = (float(x), float(y))
         except ValueError:
-            raise ValueError(f'the position in "{entry}" is not two numbers') from None
+            position = (math.nan, math.nan)
+        # float() also reads "nan" and "inf", which are not places.
+        if not all(math.isfinite(coordinate) for coordinate in position):
+            raise ValueError(f'the position in "{entry}" is not two numbers')
+        turrets.append(Turret(name, *position))
     return turrets
 
 
@@ -99,7 +104,10 @@ def travel_command(night: int, turrets: list[Turret]) -> str:
         raise ValueError(f"nights are numbered from 1, not {night}")
     command = f"open {LEVEL}?AutoNight={night}"
     if turrets:
-        command += "?Layout=" + ",".join(f"{turret.type},{turret.x:g},{turret.y:g}" for turret in turrets)
+        # .10g writes 600.0 as 600 and keeps a position's digits; plain g would round to six.
+        command += "?Layout=" + ",".join(
+            f"{turret.type},{turret.x:.10g},{turret.y:.10g}" for turret in turrets
+        )
     return command
 
 
@@ -129,14 +137,14 @@ def result_after(entries: list[str], marker: str) -> dict[str, Any] | None:
     return None
 
 
-def result_problems(result: dict[str, Any], night: int, turrets: int) -> list[str]:
+def result_problems(result: dict[str, Any], night: int, turret_count: int) -> list[str]:
     """Ways the night that was played differs from the night that was asked for."""
     problems = []
     if result["night"] != night:
         problems.append(f"asked for night {night} but the game played night {result['night']}")
-    if result["turrets_placed"] != turrets:
+    if result["turrets_placed"] != turret_count:
         problems.append(
-            f"the layout has {turrets} turrets but the game placed {result['turrets_placed']}: "
+            f"the layout has {turret_count} turrets but the game placed {result['turrets_placed']}: "
             "a type name the game does not know is skipped"
         )
     return problems
@@ -147,6 +155,11 @@ def read_state() -> dict[str, Any]:
         raise ToolError("no night is being played: run `start` first")
     state: dict[str, Any] = json.loads(STATE_FILE.read_text(encoding="utf-8"))
     return state
+
+
+def write_state(state: dict[str, Any]) -> None:
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
 
 
 def set_throttle(client: Client, *, enabled: bool) -> None:
@@ -164,54 +177,83 @@ def throttle_enabled(client: Client) -> bool:
     return bool(json.loads(values)[THROTTLE_PROPERTY])
 
 
+def logged_result(client: Client, marker: str) -> dict[str, Any] | None:
+    """The result of the night that began at the marker, read from the log, if it is over."""
+    return result_after(client.logs(f"{RESULT_TAG}|{marker}", 0), marker)
+
+
 def start(client: Client, night: int, turrets: list[Turret]) -> dict[str, Any]:
-    """Start play-in-editor, open the level into the night and leave a record for `poll` and `stop`."""
+    """Start play-in-editor, open the level into the night and leave a record for `poll` and `stop`.
+
+    If the night cannot be started, the run is stopped again before the error is passed on.
+    """
+    if STATE_FILE.exists():
+        # Its record holds the editor setting to put back, which a second start would overwrite.
+        raise ToolError("a night is already being played: run `stop` first")
     command = travel_command(night, turrets)
     state = {
         "marker": client.mark_log(),
         "night": night,
-        "turrets": len(turrets),
+        "turret_count": len(turrets),
         "command": command,
         "throttle_was_on": throttle_enabled(client),
+        "screenshots": [],
     }
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
-    set_throttle(client, enabled=False)
-    client.start_pie()
-    client.console(command)
-    deadline = time.monotonic() + ARRIVAL_TIMEOUT_SECONDS
-    while not client.pie_state().get("auto_run"):
-        if time.monotonic() >= deadline:
-            raise ToolError(f"the game did not start the night after: {command}")
-        time.sleep(1.0)
+    write_state(state)
+    try:
+        set_throttle(client, enabled=False)
+        client.start_pie()
+        client.console(command)
+        deadline = time.monotonic() + ARRIVAL_TIMEOUT_SECONDS
+        while not client.pie_state().get("auto_run"):
+            if time.monotonic() >= deadline:
+                raise ToolError(f"the game did not start the night after: {command}")
+            time.sleep(1.0)
+    except BaseException:
+        stop(client)
+        raise
     return state
 
 
 def poll(client: Client, png: Path | None = None) -> dict[str, Any] | None:
-    """The night's result if it is over, else None. Saves a picture of the game when asked."""
+    """The night's result if it is over, else None.
+
+    While the night is still being played, a picture of the game is saved to `png` when one is
+    given, and listed in the report that `stop` returns.
+    """
     state = read_state()
+    result = logged_result(client, state["marker"])
+    if result is not None:
+        return result
+    if not client.call(APP, "IsPIERunning"):
+        raise ToolError("play-in-editor stopped before the night ended")
     if png is not None:
         client.capture_game(png)
-    result = result_after(client.logs(f"{RESULT_TAG}|{state['marker']}", 0), state["marker"])
-    if result is None and not client.call(APP, "IsPIERunning"):
-        raise ToolError("play-in-editor stopped before the night ended")
-    return result
+        state["screenshots"].append(str(png))
+        write_state(state)
+    return None
 
 
 def stop(client: Client) -> dict[str, Any]:
     """Stop play-in-editor, put the editor back as it was and return the report."""
     state = read_state()
-    result = result_after(client.logs(f"{RESULT_TAG}|{state['marker']}", 0), state["marker"])
+    result = logged_result(client, state["marker"])
     try:
-        client.stop_pie()
+        # Play may have ended by itself or by hand, and stopping what is not playing is an error.
+        if client.call(APP, "IsPIERunning"):
+            client.stop_pie()
     finally:
         set_throttle(client, enabled=state["throttle_was_on"])
         STATE_FILE.unlink()
-    problems = [] if result is None else result_problems(result, state["night"], state["turrets"])
     if result is None:
-        problems.append("the night was stopped before it ended")
+        problems = ["the night was stopped before it ended"]
+    else:
+        problems = result_problems(result, state["night"], state["turret_count"])
+    if not state["screenshots"]:
+        problems.append("no screenshot was taken while the night was being played")
     return {
         "result": result,
+        "screenshots": state["screenshots"],
         "problems": problems,
         "log_problems": client.problems_since(state["marker"]),
     }
@@ -228,21 +270,17 @@ class Watch:
 
 def run(client: Client, night: int, turrets: list[Turret], watch: Watch) -> dict[str, Any]:
     """Start the night, take a picture at each interval until it ends, stop and report."""
-    screenshots: list[str] = []
     start(client, night, turrets)
     try:
         deadline = time.monotonic() + watch.timeout
+        shots = 0
         while time.monotonic() < deadline:
             time.sleep(watch.shot_every)
-            png = watch.png_dir / f"night{night}_{len(screenshots) + 1:02}.png"
-            if poll(client, png) is not None:
-                # Taken after the night ended, so not a picture of the run.
-                png.unlink()
+            shots += 1
+            if poll(client, watch.png_dir / f"night{night}_{shots:02}.png") is not None:
                 break
-            screenshots.append(str(png))
     finally:
         report = stop(client)
-    report["screenshots"] = screenshots
     return report
 
 
@@ -259,10 +297,10 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--layout", default="", help='turrets as "type,x,y;type,x,y"')
         if name == "run":
             command.add_argument("--timeout", type=float, default=600.0, help="seconds to wait for the night")
-            command.add_argument("--shot-every", type=float, default=20.0, help="seconds between screenshots")
+            command.add_argument("--shot-every", type=float, default=10.0, help="seconds between screenshots")
             command.add_argument("--png-dir", type=Path, default=SCREENSHOT_DIR)
     poll_command = commands.add_parser("poll", help="report whether the night is over")
-    poll_command.add_argument("--png", type=Path, help="save a screenshot of the game here")
+    poll_command.add_argument("--png", type=Path, help="save a screenshot here if the night is still on")
     commands.add_parser("stop", help="stop the run and print the report")
     return parser
 
