@@ -3,6 +3,18 @@
 	"EngineAssociation": "5.8",
 	"Category": "",
 	"Description": "Beacon: a third-person wave defence testbed for the UE 5.8 Unreal MCP.",
+	"Modules": [
+		{
+			"Name": "Beacon",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "BeaconEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
 	"Plugins": [
 		{
 			"Name": "ModelingToolsEditorMode",
@@ -21,6 +33,10 @@
 		},
 		{
 			"Name": "AllToolsets",
+			"Enabled": true
+		},
+		{
+			"Name": "ToolsetRegistry",
 			"Enabled": true
 		}
 	]
