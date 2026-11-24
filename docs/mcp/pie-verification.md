@@ -247,3 +247,19 @@ To see both lighting conditions, run this command in PowerShell on Windows with 
 ```powershell
 Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe -windowed }
 ```
+
+## Faster creature spawns
+
+On 2026-11-24, all nine wave assets read back with 25% shorter spawn intervals. In PIE, six alternating Sentries and Snipers 7 m from the lighthouse cleared night 1 in 42.8 s (18 creatures) and night 3 in 55.2 s (40 creatures). Both runs ended with 100 lighthouse health and clean playtest logs.
+
+| Night 3 wave | Creatures spawned | Configured interval | Median interval in play |
+|---|---:|---:|---:|
+| 1 | 9 | 1.125 s | 1.130 s |
+| 2 | 13 | 0.900 s | 0.905 s |
+| 3 | 18 | 0.750 s | 0.756 s |
+
+To watch the same night on Windows with Unreal Engine 5.8 installed, run the command below. Watch the creatures leaving the island perimeter. By the third wave another creature should appear about every three quarters of a second. This automated night keeps the player's save intact.
+
+```powershell
+Set-Location C:/docs/git/UnrealTwo; pwsh -File Tools/package.ps1; if ($LASTEXITCODE -eq 0) { & ./Packaged/Windows/Beacon.exe 'Lvl_Island?AutoNight=3?Layout=Sentry,700,0,Sniper,350,606,Sentry,-350,606,Sniper,-700,0,Sentry,-350,-606,Sniper,350,-606' -windowed }
+```
