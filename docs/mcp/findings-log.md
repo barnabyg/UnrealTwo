@@ -448,3 +448,39 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** editor Python, to read the result: `Tools/editor_python/scatter_state.py`
 - **Notes:** `SpawnGraphInstance` places a PCG Volume with a 200 cm cube brush; scaling the actor to (30, 30, 4) covers the plateau, and the ray query and sampler work inside those bounds. The first `ExecuteGraphInstance` returned an empty issue list and the meshes appeared. The seed is `seed` on the component at `<volume path>.PCG Component`. Setting it with `ObjectTools` regenerates the scatter at once; an `ExecuteGraphInstance` straight after that fails with "Failed to call Execute on instance", and is not needed. No tool returns the generated instances, so `scatter_state.py` reads the volume's instanced mesh components and prints every instance position. Seed 42 gave the same sixteen rock positions twice; seed 7 shared none of them. The path from the west shore is a real actor, `Island_Path`, tagged `ScatterExclude`: the graph finds excluders by tag, so another clear area needs only a tagged actor. Subtracting the path after the rock footprint is set keeps a rock's body off the path: over eight seeds the nearest rock centre was 530 cm from the path's centre line, and the nearest foliage 252 cm, against a path half-width of 200 cm.
+
+### F-048: the intro shot is authored with the Sequencer toolsets
+
+- **Ticket:** #14
+- **Capability:** Sequencer
+- **Tool used:** `SceneTools.add_to_scene_from_class`, `SequencerTools.create_level_sequence`, `open_sequence`, `set_display_rate`, `set_playback_range`, `add_actors`, `get_tracks_on_binding`, `get_sections`, `set_section_range`, `set_section_completion_mode`, `SequencerKeyframingTools.get_channel_names`, `add_key_float`, `remove_key_at_frame`, `get_keys`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `LS_IntroFlyover` is nine seconds at 30 frames a second and animates a `CineCameraActor` placed in the level as `IntroCamera`. `add_actors` binds a level actor into the sequence that is open in the Sequencer editor, so call `open_sequence` first; it returns a binding (`bindingId` plus `sequence`) and gives a camera a transform track with one section. Channels are `Location.X/Y/Z`, `Rotation.X/Y/Z` and `Scale.X/Y/Z`, where rotation X is roll, Y is pitch and Z is yaw. Six keys per channel were added with `add_key_float` and `"cubic"` interpolation. Yaw is keyed as one falling run (-158 to -360) so the camera turns one way round the lighthouse instead of unwinding. `set_section_completion_mode` takes `"KeepState"`, which leaves the camera on its last key when the sequence ends. To change a key, remove it with `remove_key_at_frame` and add it again.
+
+### F-049: Sequencer adds a Camera Cut track with a camera, and it fought the Blueprint for the view
+
+- **Ticket:** #14
+- **Capability:** Sequencer
+- **Tool used:** `SequencerTools.add_actors`, `get_tracks_on_sequence`, `remove_track_from_sequence`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** `add_actors` with a camera also adds a sequence-level `MovieSceneCameraCutTrack`, and its result does not mention it. The game mode sets the view itself: it cuts to `IntroCamera` when the shot starts and blends to the player with `Game|Player|SetViewTargetwithBlend` when it ends or is skipped. Watching the shot through worked. Skipping did not: the game mode started the blend and paused the sequence player, the pause evaluated the sequence once more, the cut track set the view back to the camera, and the game began with the view stuck over the sea. A per-frame trace (F-051) showed the view target go to the player and return to the camera one frame later. Removing the cut track with `remove_track_from_sequence` fixed it. If a sequence is meant to drive the view itself, keep the track and do not set the view target from a graph.
+
+### F-050: binding a delegate needs node tools, and the skip key lives on the controller
+
+- **Ticket:** #14
+- **Capability:** Blueprint graph authoring, Enhanced Input
+- **Tool used:** `BlueprintTools.create_node`, `connect_pins`, `list_compatible_event_functions`, `set_create_event_function`, `write_graph_dsl`, `DataAssetTools.create`
+- **Outcome:** worked with a workaround
+- **Fallback used:** other MCP tool: `create_node` and `connect_pins` instead of the DSL
+- **Notes:** The game mode creates the player with `Sequencer|Player|CreateLevelSequencePlayer` (bind both outputs: `(bind (actor player) ...)`), calls `Play`, and binds the player's `OnFinished` to its `EndIntro` event. The bind node is `Sequencer|Player|BindEventtoOnFinished`. Four other classes have an `OnFinished` delegate under the id `EventDispatchers|BindEventtoOnFinished`; that id made a node for a gameplay task, and passing `declaring_class` for the sequence player failed with "does not exist". The delegate comes from an `EventDispatchers|CreateEvent` node whose function is chosen with `set_create_event_function`. `EndIntro` does nothing unless the shot is playing, so the finish and the skip can both call it. The pawn's input is disabled during the shot, which also silences the pawn's input events, so `IA_SkipIntro` is handled in `BP_BeaconPlayerController`. It is mapped to Enter and the gamepad's right face button. Space was not used: `IMC_Beacon` has a higher priority than the template's context, so mapping Space there would take it away from Jump.
+
+### F-051: a per-frame trace in editor Python times short events
+
+- **Ticket:** #14
+- **Capability:** agent workflow
+- **Tool used:** none; editor Python through the console
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python
+- **Notes:** Reading the game state through the console costs about three seconds a call, too slow to time a nine-second shot. A script registered `unreal.register_slate_post_tick_callback`, recorded the game time whenever the intro flag, the started flag or the view target changed, and sampled the camera once a second; a second script unregistered it and printed the rows. Keep the callback handle on the `unreal` module so the second script can find it. With the editor in the background the trace has one row every third of a second, which is the resolution of the times in the verification record.

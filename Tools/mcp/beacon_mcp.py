@@ -45,8 +45,11 @@ EXPECTED_NOISE = (
 )
 
 
-# The main menu button that starts a game.
+# The main menu button that starts a game, and the key that skips the intro shot after it.
 PLAY_BUTTON = "Play"
+SKIP_INTRO_KEY = "Enter"
+# The hand-off from the intro takes about a second; each attempt reads the game state once.
+START_GAME_ATTEMPTS = 8
 
 # The level viewport panel covers at least this share of the editor window.
 VIEWPORT_MIN_AREA = 0.4
@@ -267,16 +270,28 @@ class Client:
         self.console(f"py print('{marker}')")
         return marker
 
+    def start_game(self) -> None:
+        """From the main menu, press Play, skip the intro shot and wait until the game has begun."""
+        self.click(PLAY_BUTTON)
+        self.console(f"Input.+key {SKIP_INTRO_KEY}")
+        self.console(f"Input.-key {SKIP_INTRO_KEY}")
+        for _ in range(START_GAME_ATTEMPTS):
+            if self.pie_state().get("started"):
+                return
+            time.sleep(0.5)
+        raise ToolError("the game did not start after Play and skipping the intro")
+
     def verify(self, png: Path, seconds: float, *, stay_on_menu: bool = False) -> list[str]:
         """The verify loop: start PIE, start a game, wait, capture, stop PIE, return problem log lines.
 
-        The game opens on its main menu, so the loop clicks Play unless asked to stay there.
+        The game opens on its main menu and then plays an intro shot, so the loop
+        presses Play and skips the shot unless asked to stay on the menu.
         """
         marker = self.mark_log()
         self.start_pie()
         try:
             if not stay_on_menu:
-                self.click(PLAY_BUTTON)
+                self.start_game()
             time.sleep(seconds)
             self.capture_game(png)
         finally:

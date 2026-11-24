@@ -105,3 +105,14 @@ Instance positions were read with `Tools/editor_python/scatter_state.py`. The pl
 | Nothing in the sea, in the lighthouse or blocking the route | Every instance is on the plateau top (rocks at z = 0, foliage at z = 25) between 721 and 2591 cm from the lighthouse, which has a radius of 350. None is on the path from the west shore: over eight seeds the nearest rock centre was 530 cm from the path's centre line (half-width 200). In PIE, path queries from twelve points round the shore to the lighthouse were all valid and complete, 2720 to 2893 cm against 2720 straight, and with no turrets the creatures of night one took the lighthouse from 100 to 60. |
 | A new seed changes the layout | Seed 42 twice: the same sixteen rock positions. Seed 7: sixteen rocks, none at a seed 42 position. Seeds 1 to 6 gave 14 to 18 rocks. |
 | Player can walk the island, rocks have collision | Holding W from the start for 1.5 s walked the path to x = -385, as before the scatter. Walking at a rock at (712, 992) from 450 cm away: stopped short of it and slid aside, 352 cm in 2 s, against 1115 cm in 1.5 s on open ground. Walking at a bush at (-788, -2420): straight through, x from -1088 to 36. The rock components report the `BlockAll` profile and the foliage `NoCollision`. |
+
+## #14 Intro flyover
+
+Times are game seconds from a per-frame trace (finding F-051), to the nearest third of a second.
+
+| Criterion | Evidence |
+|---|---|
+| A Level Sequence with an animated camera plays when the game starts | After a click on Play the view target changed from the character to `CineCameraActor` at 6.33 s. Camera positions one second apart: (4911, 2214, 1275) over the sea to the east, (3117, 1610, 1028), (2165, -192, 905), (1383, -2430, 818) south of the lighthouse, (-160, -2365, 701), (-1686, -1975, 572), (-2174, -1009, 431), (-2196, -119, 265) behind the player. |
+| Runs 5 to 15 seconds and ends by blending to the player camera | The shot ran from 6.33 s to 15.0 s; the view then blended to the character's camera at (-1900, 75, 168) and the game began at 15.67 s. About 9.3 s in all: a nine-second sequence and a one-second blend. |
+| Input disabled during the shot, restored after | Holding W during the shot left the player at (-1500, 0). After the hand-off, W for one second moved the player to x = -386. |
+| Skip ends the shot early with the same state | Enter at 10.67 s: the view went to the character at once, blending from (235, -1828, 622), and the game began at 11.33 s. The state two seconds later was the same in both runs: started, day 1, 60 resources, 8 pickups, no turrets, lighthouse 100, view target the character, camera at (-1900, 75, 168), player at (-1500, 0, 94). |

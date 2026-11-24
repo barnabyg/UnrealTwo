@@ -10,7 +10,7 @@ The editor must be running with the MCP server up (see [unreal-mcp.md](unreal-mc
 Set-Location C:\docs\git\UnrealTwo; python Tools/mcp/beacon_mcp.py verify --png Saved/BeaconScreenshots/check.png --seconds 5
 ```
 
-It starts PIE in the level viewport, clicks Play on the main menu, waits, saves a screenshot of the game, stops PIE, and prints every warning or error the Output Log gained during the run. It exits 0 only when there were none. Add `--menu` to stay on the main menu instead.
+It starts PIE in the level viewport, clicks Play on the main menu, skips the intro shot, waits, saves a screenshot of the game, stops PIE, and prints every warning or error the Output Log gained during the run. It exits 0 only when there were none. Add `--menu` to stay on the main menu instead.
 
 ## The steps, as MCP tool calls
 
@@ -20,7 +20,7 @@ The command above is a wrapper. These are the calls it makes, for agents that ca
 |---|---|---|
 | Mark the log | `SlateInspectorToolset.Snapshot`, `Click`, `Type` | Types `py print('<marker>')` into the editor's `Cmd` box, so later log reads can ignore everything before the marker. |
 | Start PIE | `EditorAppToolset.StartPIE` | `{"options": {"bSimulate": false, "playMode": "PlayMode_InViewPort", "warmupSeconds": 2.0}}`. Returns after BeginPlay and the warm-up. |
-| Start a game | `SlateInspectorToolset.Snapshot`, then `Click` on the ref of `button "Play"` | The game opens on its main menu and nothing runs until Play is pressed. The game's widgets are in the snapshot like any editor widget. |
+| Start a game | `SlateInspectorToolset.Snapshot`, then `Click` on the ref of `button "Play"` | The game opens on its main menu and nothing runs until Play is pressed. The game's widgets are in the snapshot like any editor widget. A ten-second intro shot follows; `Input.+key Enter` skips it. The `started` field of the game state turns true when play begins. |
 | Act on the game | `SlateInspectorToolset.Type` into the `Cmd` box | While PIE runs, console commands go to the game. See "Driving the game". |
 | Read game state | `Type` into the `Cmd` box: `py "<repo>/Tools/editor_python/pie_state.py"`, then `LogsToolset.GetLogEntries` with pattern `LogPython` | The script prints one JSON line that starts with `PIESTATE`; take the last one. |
 | Capture | `SlateInspectorToolset.Screenshot` on the viewport panel | `EditorAppToolset.CaptureViewport` renders the editor world even during PIE, so it cannot show the game. |
@@ -39,6 +39,7 @@ Input.+key Gamepad_RightX 1     turn the camera right
 Input.+key LeftMouseButton      fire
 Input.+key E            place a turret
 Input.+key B            open or close the build menu
+Input.+key Enter        skip the intro shot
 slomo 0.15              slow the game down to catch a short event; slomo 1 restores it
 ```
 
@@ -49,7 +50,7 @@ client = Client()
 marker = client.mark_log()
 client.start_pie()
 try:
-    client.click("Play")  # the main menu; any game button can be clicked by its label
+    client.start_game()  # presses Play on the main menu and skips the intro shot
     client.console("Input.+key W")
     time.sleep(1.5)
     client.console("Input.-key W")
