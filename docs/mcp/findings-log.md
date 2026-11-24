@@ -484,3 +484,30 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** editor Python
 - **Notes:** Reading the game state through the console costs about three seconds a call, too slow to time a nine-second shot. A script registered `unreal.register_slate_post_tick_callback`, recorded the game time whenever the intro flag, the started flag or the view target changed, and sampled the camera once a second; a second script unregistered it and printed the rows. Keep the callback handle on the `unreal` module so the second script can find it. With the editor in the background the trace has one row every third of a second, which is the resolution of the times in the verification record.
+
+### F-052: saving is a SaveGame Blueprint and ordinary graphs
+
+- **Ticket:** #15
+- **Capability:** SaveGame
+- **Tool used:** `BlueprintTools.create`, `add_variable`, `add_object_variable`, `add_function_graph`, `add_function_param`, `write_graph_dsl`, `get_default_object`, `ObjectTools.set_properties`, `UMGToolSet.AddWidget`, `BindToEventProperty`
+- **Outcome:** worked
+- **Fallback used:** editor Python, to read the save file back
+- **Notes:** `BP_BeaconSave` has the parent `/Script/Engine.SaveGame` and five variables: `SaveVersion`, `NightNumber`, `Resources`, and two arrays made with `container_type: "ARRAY"`, `TurretTypeNames` (string) and `TurretTransforms` (Transform). The game mode's `SaveProgress` runs at the start of every day: `SaveGame|CreateSaveGameObject`, a cast, the setters, one `Utilities|Array|Add` per turret on the save object's array getters, then `SaveGame|SaveGametoSlot`. `TryLoadSave` accepts a save only if the slot exists, the object casts to `BP_BeaconSave` and its version is between 1 and the game mode's `CurrentSaveVersion`. `RestoreTurret` finds the turret type whose display name matches the saved name, so a save survives the type list being reordered; a name that no longer exists is skipped. Defaults such as the slot name and the version are set on the class default object. Lighthouse and turret health are not saved: the ticket lists night, resources and turrets. `read_graph_dsl` prints the save object's setter as `Variables|Default|SetNightNumber` and the turret's `TypeName` getter as `Interchange|Node|GetTypeName`; both are the right nodes, which was confirmed by loading the slot in editor Python with `GameplayStatics.load_game_from_slot` and reading the five properties. To test a newer save, `CurrentSaveVersion` was set to 99 on the class default object for one run and back to 1.
+
+### F-053: LoadGameFromSlot crashes the engine on a file that is not a save
+
+- **Ticket:** #15
+- **Capability:** SaveGame
+- **Tool used:** none; found in a PIE test
+- **Outcome:** failed
+- **Fallback used:** none available in a Blueprint-only project; the game limits the damage
+- **Notes:** A save file that held 1120 bytes of plain text crashed the editor when the game loaded it: "Assertion failed ... UnrealNames.cpp ... FName's 1023 max length exceeded. Got 1936287859 characters". The engine treats a file without the `GVAS` tag as an old-format save and reads a string length from its first bytes. No Blueprint node can read a file's bytes to check the tag first (searched for file, JSON and load-from-memory nodes; only `Utilities|Paths|FileExists` exists). The other kinds of bad save are safe: an empty file, a save cut to half its length, a file of zeros and a save with a newer version all return nothing or fail the version check, and the game starts a new one. The cut and zeroed files each log one engine warning, "Failed to find object 'Class '". Because of the crash the menu no longer loads the save to decide whether to offer Continue; it only asks whether the slot exists, and loads when Continue is pressed. A foreign file then cannot crash the game at launch, and New Game replaces it. Closing the gap needs a C++ check of the first four bytes, or a text save format.
+
+### F-054: after a crash the editor waits on a dialog and the MCP server never starts
+
+- **Ticket:** #15
+- **Capability:** agent workflow
+- **Tool used:** none; the server was down
+- **Outcome:** worked with a workaround
+- **Fallback used:** manual step replaced by a file move
+- **Notes:** Relaunching the editor after the crash in F-053 left the process running with no MCP server: the health check was refused for several minutes and the log stopped at frame 0. `(Get-Process UnrealEditor).MainWindowTitle` read "Restore Packages", the modal dialog that offers to restore autosaved packages, which blocks start-up until someone answers it. The agent cannot click it, since every MCP tool lives inside the blocked process. The record of what to restore is `Saved/Autosaves/PackageRestoreData.json`; it listed one template Blueprint that nobody had edited (F-024). Renaming that file and starting the editor again went straight to the project. Read the file before moving it: if it lists real work, a person should answer the dialog. Delete a test save that crashes the game before relaunching, or the next PIE run crashes too.

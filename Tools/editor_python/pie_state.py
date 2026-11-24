@@ -58,6 +58,7 @@ def read_state() -> dict[str, object]:
         "paused": unreal.GameplayStatics.is_game_paused(world),
         "started": variable(mode, "bStarted", False),
         "intro_playing": variable(mode, "bIntroPlaying", False),
+        "has_usable_save": variable(mode, "bHasUsableSave", False),
         "game_over": variable(mode, "bGameOver", False),
         "time": round(unreal.GameplayStatics.get_time_seconds(world), 1),
     }

@@ -116,3 +116,15 @@ Times are game seconds from a per-frame trace (finding F-051), to the nearest th
 | Runs 5 to 15 seconds and ends by blending to the player camera | The shot ran from 6.33 s to 15.0 s; the view then blended to the character's camera at (-1900, 75, 168) and the game began at 15.67 s. About 9.3 s in all: a nine-second sequence and a one-second blend. |
 | Input disabled during the shot, restored after | Holding W during the shot left the player at (-1500, 0). After the hand-off, W for one second moved the player to x = -386. |
 | Skip ends the shot early with the same state | Enter at 10.67 s: the view went to the character at once, blending from (235, -1828, 622), and the game began at 11.33 s. The state two seconds later was the same in both runs: started, day 1, 60 resources, 8 pickups, no turrets, lighthouse 100, view target the character, camera at (-1900, 75, 168), player at (-1500, 0, 94). |
+
+## #15 Save between nights
+
+Stopping PIE and starting it again stands for quitting and relaunching. The save is `Saved/SaveGames/BeaconSave.sav`; its contents were read by loading the slot in editor Python.
+
+| Criterion | Evidence |
+|---|---|
+| Saves automatically at the start of each day | No save file before the run. After Play, at the start of day one: the file exists and holds version 1, night 0, 60 resources, no turrets. After night one, at the start of day two: night 1, 130 resources and five turrets. |
+| Continue restores night, resources and every turret with type and position | Before quitting on day two: 130 resources, Sentry at (-723, -723) and (723, 723), Sniper at (-1250, 0) and (-723, 723), Sprayer at (723, -723). After a relaunch the menu offers "Continue" and "New Game"; after Continue the game is on day 2 with night number 1, 130 resources and the same five types at the same five positions. The lighthouse is back at 100; its health is not part of the save. |
+| New Game discards the save | With that save present, New Game started day 1 with 60 resources and no turrets, and the file then held night 0, 60 resources, no turrets. |
+| Missing or unreadable save falls back to a new game | No file: the menu offers only "Play". An empty file, a save cut to half its length, a file of zeros and a save with version 99: Continue started day 1 with 60 resources and no turrets and showed "The saved game could not be read. Starting a new game."; the day's autosave then replaced the file. The cut and zeroed files each logged one engine warning. **Not met for one case:** a file of plain text crashed the engine inside `LoadGameFromSlot` (finding F-053). |
+| The format carries a version number | `SaveVersion` is 1 in every file the game wrote. A file written as version 99 was refused by a game whose current version is 1. |
