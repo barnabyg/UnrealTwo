@@ -530,3 +530,65 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Fallback used:** script client (`Tools/mcp/beacon_mcp.py`)
 - **Notes:** While the editor's window is minimised the server still answers, but `Windows` with `action: "list"` returns an empty list and `Snapshot` an empty string, so the console box cannot be found and nothing can be typed, clicked or captured. The other toolsets keep working: graphs were searched, edited, compiled and saved with the window minimised. The client now reports an empty snapshot as a minimised window. After the window was restored, the first `verify` run failed: `Click` on the menu's button returned true and the game stayed on the menu. The next run passed, as did a repeat of the same case, so the click that brought the window to the front was probably swallowed. `start_game` no longer presses the button once and assumes: it reads the game state, clicks while the menu is up, presses the skip key only once the intro is playing, and waits through the hand-off. It also survives a skip that arrives too early, since the intro then plays out inside the time allowed.
 
+### F-057: a custom tool needs C++ that no tool can scaffold as a project module or compile
+
+- **Ticket:** #16
+- **Capability:** custom C++ tools
+- **Tool used:** none for the module or the build; `PluginToolset.GetPluginTemplateDescriptions`, `IsPluginCreationAllowed` to see what exists
+- **Outcome:** no tool
+- **Fallback used:** C++, written and built from a shell
+- **Notes:** The only scaffolding tool is `PluginToolset.CreatePlugin`, which makes a plugin from one of ten templates (Blank, Blueprint Library, Editor Mode and so on). The ticket asks for the project's first module, and a plugin in a project with no `Source/` leaves packaging to build a generated target, so the code went into project modules instead: `Source/Beacon` (an empty runtime module, because a game target will not link without a primary game module) and `Source/BeaconEditor` (editor only, holding the toolset), with two `Target.cs` files and a `Modules` list in `Beacon.uproject`. `CreatePlugin` and `AssetTools.write_file` were not tried. Nothing compiles code through the MCP. `Engine/Build/BatchFiles/Build.bat BeaconEditor Win64 Development -Project=<uproject> -WaitMutex` built both modules in 56 s the first time and about 30 s after a change. The first build ran with the editor open, since nothing had the new DLLs loaded; every later one needed the editor closed, because the editor then had them loaded and Live Coding holds the build lock. Visual Studio 2026 (MSVC 14.51) is newer than the 14.50 that UE 5.8 prefers: it works, but compiling the shared precompiled header prints 29 `C4996` warnings from engine headers, and `-WarningsAsErrors` then fails on the engine's own code (see docs/agents/verification.md). `Beacon.uproject` also lists the Toolset Registry plugin now, because the module links against it.
+
+### F-058: an AICallable function becomes a tool with a schema taken from its comments
+
+- **Ticket:** #16
+- **Capability:** custom C++ tools
+- **Tool used:** `list_toolsets`, `describe_toolset`, `call_tool` on `BeaconEditor.BeaconBalanceToolset.SimulateWave`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** A class derived from `UToolsetDefinition`, registered with `UToolsetRegistry::RegisterToolsetClass` in the module's `StartupModule`, appeared as `BeaconEditor.BeaconBalanceToolset` after one editor restart. No `ModelContextProtocol.RefreshTools` was needed, and Claude Code's session carried on, since with tool search on it only ever sees `list_toolsets`, `describe_toolset` and `call_tool`. The function's doc comment became the tool description, `@param` lines the argument descriptions and `UPROPERTY` comments the field descriptions. `USTRUCT` arguments and results became JSON objects with lower-camel names, `TArray` an array, `UENUM` a string with an `enum` list, and the result arrived under `returnValue`. `UKismetSystemLibrary::RaiseScriptError` reaches the caller as the tool error, word for word. The schema marks every struct field as required, but the server does not enforce it: a turret sent without `x` and `y` arrived with zeros, and a night sent as the string "three" arrived as 0, so the function has to check its own input. Restarting is scriptable: typing `QUIT_EDITOR` into the `Cmd` box closes the editor, and it is launched again from a shell. Save first, or it waits on a save prompt that no tool can answer.
+
+### F-059: a C++ tool reads Blueprint-defined data by property name, including unsaved edits
+
+- **Ticket:** #16
+- **Capability:** DataTables and DataAssets, custom C++ tools
+- **Tool used:** `BeaconEditor.BeaconBalanceToolset.SimulateWave`, `ObjectTools.set_properties`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** The wave, night, creature and turret classes exist only as Blueprints (F-028), so C++ has no headers for them. The tool loads the game mode's Blueprint class, takes its default object and walks `Nights`, `Waves`, `Creatures` and `TurretTypes` with `FindPropertyByName`; a Blueprint variable's property has the variable's name. It reads the objects as loaded, so a change made with `set_properties` counts at once: `Count` on `DA_Wave_N1_1` from 3 to 6 took the night from 18 creatures and 1230 health to 21 and 1380, and `Damage` on `DA_Turret_Sentry` from 10 to 20 took a two-turret layout from a 10% chance of a win to 100%. Both were set back and the figures returned. Three rules are not in any data asset and are repeated in the C++: the spawn radius of 3200 cm (a literal in the game mode's `SpawnCreature` graph), the 60 cm acceptance radius of the trees' MoveTo node, and the count scale for nights past the last authored one. Whether a creature type hunts turrets is read from the asset registry: its behaviour tree depends on `EQS_NearestTurret`.
+
+### F-060: the automation toolset runs C++ tests in the open editor
+
+- **Ticket:** #16
+- **Capability:** custom C++ tools
+- **Tool used:** `AutomationTestToolset.DiscoverTests`, `ListTests`, `RunTestsByFilter`, `GetTestResults`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** After `DiscoverTests`, `RunTestsByFilter` with `StartsWith:Beacon.` ran the module's tests in the live editor in a third of a second, and `GetTestResults` listed each with its state. The bare filter `Beacon` also matches the engine's `OnlineBeacon` tests. `RunTestsByFilter` itself came back as a tool error whose text was the two messages that tests of the error paths raise on purpose, although every test had passed: a script error raised inside a test leaks into the tool call that started the run. Read `GetTestResults` for the truth. The same tests run without the open editor through `UnrealEditor-Cmd.exe <uproject> -ExecCmds="Automation RunTests StartsWith:Beacon.; Quit" -nullrhi -unattended -ReportExportPath=<dir>`, which writes `index.json`; that is what the verify script uses. A raised tool error is also logged as a `LogScript` warning, which marks a test as passed with warnings unless the test declares it with `AddExpectedMessagePlain`.
+
+### F-061: a night starts from level options, and the game logs its result with a Log String node
+
+- **Ticket:** #17
+- **Capability:** PIE control, Blueprint graph authoring
+- **Tool used:** `BlueprintTools.add_variable`, `add_function_graph`, `add_function_param`, `add_event`, `write_graph_dsl`, `compile_blueprint`; `EditorAppToolset.StartPIE`, `StopPIE`, `IsPIERunning`; `SlateInspectorToolset` for the console; `LogsToolset.GetLogEntries`
+- **Outcome:** worked
+- **Fallback used:** none
+- **Notes:** `StartPIE` cannot pass options to the level, but the console command `open Lvl_Island?AutoNight=3?Layout=Sentry,700,0,Sniper,-700,0`, typed into the `Cmd` box while PIE runs, travels to the same level with them. The game mode reads them with `GameOptions|HasOption` and `GameOptions|ParseOption`, splits the layout with `Utilities|String|ParseIntoArray` and converts with `StringToInteger` and `StringToFloat`. `Utilities|String|LogString` writes to the log only, as `LogBlueprintUserMessages: <text>`, which is how the game reports the night without a Print String node (F-055). The DSL reference does not say how to put a quote inside a string literal, and it was not tried, so the result line is `key=value` pairs rather than JSON. The first version set `bStarted` before a one-second delay; the tick event then saw a started game by day with the day already over and called `EndDay`, so the night started twice and played as night 2 with two spawn chains. Setting `bStarted` after the delay fixed it; a wrong night number in the result line is what showed it. `read_graph_dsl` prints the lighthouse's health getter as `Class|AbilitySystemTestAttributeSet|GetHealth`; it is the right node, and the logged health was correct. After the five events were rewritten, `graph_orphans.py --delete` reported 0 unreachable nodes. Polling is one `GetLogEntries` call with the pattern `BEACON_NIGHT_RESULT|<marker>`.
+
+### F-062: the background throttle decides who wins a night
+
+- **Ticket:** #17
+- **Capability:** PIE control
+- **Tool used:** `ConfigSettingsToolset.GetSectionPropertyValues`, `SetSectionProperties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** script client (`Tools/mcp/night_playtest.py`)
+- **Notes:** verify-loop.md says game time still advances correctly at the 3 frames a second the editor drops to in the background. Time does, but the fight does not: a turret fires at most once a frame, and creatures and their trees also tick once a frame. Night 1 with a Sentry at (600, 0) and a Sniper at (-600, 0) was won with the lighthouse untouched in the one run made with the editor throttled in the background, and lost four times out of four with the throttle off (14 to 17 of 18 creatures killed, both turrets destroyed each time). The playtest script therefore switches `bThrottleCPUWhenNotForeground` off before the run and back afterwards (F-045 has the setting's path). A balance figure measured in a throttled editor may not hold at a normal frame rate; the earlier tickets' records do not say which they were.
+
+### F-063: saving after reading graphs rewrites Blueprints that were only read
+
+- **Ticket:** #17
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.read_graph_dsl`; `Tools/editor_python/save_dirty.py`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none: the rewritten files were left out of the commit
+- **Notes:** F-024 says `read_graph_dsl` marks the Blueprint it reads as unsaved, and `save_dirty.py` avoids template Blueprints for that reason. It does not help for Beacon's own: after the turret, creature, lighthouse and attack task graphs were read to learn the rules, `beacon_mcp.py save` wrote all four back to disk with different bytes and no real change. `BB_Creature` was rewritten too, after play-in-editor runs. Check `git status` after a save and commit only the assets that were meant to change.
