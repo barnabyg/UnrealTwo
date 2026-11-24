@@ -77,7 +77,10 @@ A clean start has no errors. These lines are expected and need no action:
 ## Caveats
 
 - There is no authentication. The server is loopback-only by default (`[HTTPServer.Listeners] DefaultBindAddress=127.0.0.1`), so don't widen it or add allowed origins.
-- Tool calls run one at a time on the game thread. Claude Code gives up on a single call after about 120 s.
+- Tool calls run one at a time on the game thread, and the editor is frozen for the length of each. Claude Code gives up on a single call after about 120 s. Start long jobs so they return at once and poll the log for the result, as the night playtest and the cook do (findings F-061, F-066).
+- One editor, one agent. The server has no lock and does not show who else is connected, so a second agent's `QUIT_EDITOR`, PIE run or menu click lands in the middle of yours (finding F-068).
+- Any modal or native dialog in the editor stops the server, since every tool runs inside that process: a save prompt, a package reload, or the folder picker that Package Project's tooltip implies, which was avoided for that reason. Only a shell can recover the editor (findings F-064, F-066). The Restore Packages dialog after a crash is the same problem; see below.
+- There is no build, cook or package tool. Packaging is `pwsh Tools/package.ps1`; see [packaging.md](packaging.md).
 - If `list_toolsets` only returns `AgentSkillToolset`, the toolset plugins aren't enabled.
 - After an editor crash, the next launch can stop on a "Restore Packages" dialog. The MCP server does not start until someone answers it, so the health check is refused while the process runs. `(Get-Process UnrealEditor).MainWindowTitle` shows the dialog's title. See finding F-054 in `docs/mcp/findings-log.md` for how to get past it.
 - A second editor needs another port (`-ModelContextProtocolPort=8001`) and a second `.mcp.json` entry. The verify script starts a windowless one on port 8017 to run the C++ tests.

@@ -18,7 +18,7 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Unreal MCP
 
-How to launch the editor and connect: `docs/agents/unreal-mcp.md`. Before building anything, read `docs/mcp/capability-map.md` for which toolset covers what, and `docs/mcp/tool-inventory.md` for every tool the server reports. Append what happened to `docs/mcp/findings-log.md`, using its entry format.
+How to launch the editor and connect: `docs/agents/unreal-mcp.md`. Before building anything, read `docs/mcp/capability-map.md` for which toolset covers what, and `docs/mcp/tool-inventory.md` for every tool the server reports. Append what happened to `docs/mcp/findings-log.md`, using its entry format. `docs/mcp/evaluation-report.md` rates every capability from that log and says what to trust the MCP with; read it before planning work through the MCP.
 
 ### C++ and custom MCP tools
 
