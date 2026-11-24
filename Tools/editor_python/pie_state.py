@@ -60,6 +60,7 @@ def read_state() -> dict[str, object]:
         "intro_playing": variable(mode, "bIntroPlaying", False),
         "has_usable_save": variable(mode, "bHasUsableSave", False),
         "game_over": variable(mode, "bGameOver", False),
+        "auto_run": variable(mode, "bAutoRun", False),
         "time": round(unreal.GameplayStatics.get_time_seconds(world), 1),
     }
     camera = unreal.GameplayStatics.get_player_camera_manager(world, 0)

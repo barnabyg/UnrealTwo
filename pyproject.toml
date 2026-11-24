@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = []
 
 [dependency-groups]
-dev = ["mypy", "pytest", "pytest-xdist", "ruff"]
+dev = ["clang-format", "mypy", "pytest", "pytest-xdist", "ruff"]
 
 [tool.uv]
 package = false
@@ -21,7 +21,8 @@ ignore = ["ANN401"]
 select = ["ANN", "ARG", "B", "C4", "E", "F", "I", "N", "PL", "PTH", "RET", "RUF", "S", "SIM", "UP", "W"]
 
 [tool.ruff.lint.per-file-ignores]
-"Tools/tests/*" = ["S101", "PLR2004"] # pytest assertions and literal expectations
+# pytest assertions, literal expectations, and fakes that keep the signatures of what they replace
+"Tools/tests/*" = ["S101", "PLR2004", "ARG002"]
 
 [tool.mypy]
 strict = true
