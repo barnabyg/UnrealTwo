@@ -25,10 +25,10 @@ select = ["ANN", "ARG", "B", "C4", "E", "F", "I", "N", "PL", "PTH", "RET", "RUF"
 
 [tool.mypy]
 strict = true
-files = ["Tools/mcp", "Tools/tests"]
-mypy_path = "Tools/mcp"
+files = ["Tools/mcp", "Tools/audio", "Tools/tests"]
+mypy_path = "Tools/mcp:Tools/audio"
 
 [tool.pytest.ini_options]
 testpaths = ["Tools/tests"]
-pythonpath = ["Tools/mcp"]
+pythonpath = ["Tools/mcp", "Tools/audio"]
 addopts = "-n auto -W error"

@@ -84,3 +84,13 @@ Buttons were pressed with `SlateInspectorToolset.Click` on the game's own widget
 | Build menu lists types with costs, disables unaffordable | B opens it: buttons "Sentry  -  cost 25   (selected)", "Sniper  -  cost 40", "Sprayer  -  cost 30". A click on Sniper closed the menu and set the selection to Sniper; E then placed a Sniper and resources fell from 60 to 20. With 30 resources the Sniper button is marked `[disabled]` and drawn dimmed, and a click on it changed nothing. |
 | Game over shows the night reached, restart works | Lighthouse to 0 during night one: game paused, "THE LIGHTHOUSE HAS FALLEN", "You reached night 1", `button "Restart"`. After a click on Restart: game time back to 6 s, `started` true with no menu, day one, 60 resources, lighthouse 100, no turrets, and holding W moved the player. |
 | UMG widgets, debug text removed | Five Widget Blueprints under `Content/Beacon/UI`. The game mode, creature, turret and lighthouse graphs no longer contain a `PrintString` node, and the HUD's game-over text block is gone. |
+
+## #12 Combat feedback
+
+| Criterion | Evidence |
+|---|---|
+| Creatures flash on damage, from a material parameter on a material instance | The creature's body material in PIE is a dynamic instance of `MI_Creature`. Its `Flash` parameter read 1.0 on the sample after each hit (health 30, then 10) and 0.0 on the samples between. In the capture taken at `Flash` 1.0 the creature is white instead of purple. |
+| Player and turret shots show a Niagara muzzle effect | With a Sentry firing, the live Niagara components were `NS_MuzzleFlash`, one per recent shot; the capture shows the burst at the end of the barrel. Holding fire as the player for one second listed twelve `NS_MuzzleFlash` components. |
+| Creature deaths show a Niagara burst | `NS_DeathBurst` appeared in the component list on the sample where the creature's health reached 0, and the capture shows the burst where it stood. |
+| Sounds, or a finding | Three generated sounds are imported as `SFX_Shot`, `SFX_Hit` and `SFX_Death` and played from the shot, damage and death graphs (finding F-043). The agent cannot hear them; the log is clean while they play. |
+| Effects clean up, frame rate holds through a wave | Five turrets, the player firing throughout, night one played to the end. Frames per second over six-second samples: 115 by day with no combat, then 115, 115, 115, 114, 115, 115 through waves one to three. Live Niagara components peaked at 10 during wave three and were 0 four seconds after the night ended. Measured with the editor's background throttle off (finding F-045). |

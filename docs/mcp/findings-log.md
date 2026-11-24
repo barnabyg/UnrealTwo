@@ -385,3 +385,48 @@ Add entries at the end, numbered in order. Do not rewrite an old entry when some
 - **Outcome:** worked with a workaround
 - **Fallback used:** editor Python: call a Blueprint function instead
 - **Notes:** `set_editor_property("Resources", 30)` on the running game mode raises "Property 'Resources' ... cannot be edited on instances". Reading works. To put the game in a state for a test, call one of the Blueprint's functions with `call_method("AddResources", args=(-30,))`, or apply damage with `GameplayStatics.apply_damage`.
+
+### F-041: the hit flash is a material parameter, and reparenting a material instance does not mark it unsaved
+
+- **Ticket:** #12
+- **Capability:** materials
+- **Tool used:** `MaterialTools.create_material`, `add_expression`, `connect_expressions`, `connect_to_output`, `recompile`, `MaterialInstanceTools.set_parent`, `list_parameters`, `ObjectTools.set_properties`
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python, for one save
+- **Notes:** `M_Creature` has a `Base Color` vector parameter, a `Flash` scalar (0 to 1), a `Flash Color` and a `Flash Glow`: base colour is a lerp from `Base Color` to `Flash Color` by `Flash`, and emissive is `Flash Color * Flash * Flash Glow`. Expression classes are `/Script/Engine.MaterialExpression<Name>`; a parameter's name and default are set with `ObjectTools` (`parameterName`, `defaultValue`), and a constant's value is its `r`. `MI_Creature` was reparented from the template's `M_FlatCol` and kept its `Base Color` override because the parameter name is the same. The creature sets `Flash` to 1 on damage with `Rendering|Material|SetScalarParameterValueonMaterials` and back to 0 after a `RetriggerableDelay` of 0.12 s. `set_parent` does not mark the instance's package dirty: `is_dirty` said false, `save_assets` returned true and wrote nothing, and `save_dirty.py` skipped it, while PIE showed the flash from the unsaved copy. `unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False)` wrote it. Check `git status` for every asset a ticket changed, not only the ones it created.
+
+### F-042: Niagara systems are made from engine templates and tuned through stack inputs
+
+- **Ticket:** #12
+- **Capability:** Niagara
+- **Tool used:** `NiagaraToolset_System.CreateNiagaraSystem`, `GetSystemSummary`, `GetEmitterTopology`, `GetEmitterInputValues`, `RemoveEmitter`, `RemoveModule`, `SetStackInputData`, `GetSystemCompileState`, `GetStackIssues`
+- **Outcome:** worked
+- **Fallback used:** script client (`Tools/mcp/beacon_mcp.py`), to read the large results
+- **Notes:** A system needs a template. `NS_MuzzleFlash` comes from `/Niagara/DefaultAssets/Templates/Systems/DirectionalBurst` and `NS_DeathBurst` from `RadialBurst`; their ribbon emitters were removed with `RemoveEmitter`, and the module that fed the ribbon with `RemoveModule`. Every reference is the same struct: `system`, `emitterName`, `scriptName` (`EmitterUpdateScript`, `ParticleSpawnScript`, `ParticleUpdateScript`), `moduleName`, `rendererIndex` (-1 when unused) and `inputNameStack` (the input's name in a one-item list). A value is `{"struct": {"refPath": <type>}, "value": {...}}` with the type that `GetEmitterInputValues` reports: `/Script/Niagara.NiagaraInt32` and `NiagaraFloat` with `{"value": n}`, `/Script/CoreUObject.LinearColor`, `Vector2f` and `Vector3f` with their fields. Colour values above 1 make the sprites glow. Set this way: burst count, lifetime, sprite size, colour, cone axis and angle, gravity. Both systems compiled with no errors or warnings. `GetEmitterInputValues` for one template emitter is about 15,000 characters. The effects are spawned with `Niagara|SpawnSystematLocation`, which destroys the component when the system completes.
+
+### F-043: no tool authors audio; the sounds are synthesised and imported with editor Python
+
+- **Ticket:** #12
+- **Capability:** audio
+- **Tool used:** none exists
+- **Outcome:** no tool
+- **Fallback used:** editor Python: `Tools/editor_python/import_sfx.py`, after `Tools/audio/make_sfx.py`
+- **Notes:** `make_sfx.py` writes three mono 16-bit 44.1 kHz WAV files from sine sweeps and seeded noise using only the Python standard library: a shot (0.14 s), a hit (0.09 s) and a death (0.45 s). `import_sfx.py` imports them with `AssetImportTask` (`automated`, `replace_existing`, `save`) into `/Game/Beacon/Audio`; the three `SoundWave` assets read back through `ObjectTools` with those durations, one channel and 44100 Hz. Graphs play them with `Audio|PlaySoundatLocation`, which takes the asset path as a quoted string. The agent cannot hear the game, so what is verified is that the assets exist, the nodes are wired and the log stays clean. A person should listen once.
+
+### F-044: nodes in an existing graph can be swapped without rewriting the graph
+
+- **Ticket:** #12
+- **Capability:** Blueprint graph authoring
+- **Tool used:** `BlueprintTools.find_nodes`, `get_node_infos`, `create_node`, `connect_pins`, `delete_node`, `write_graph_dsl`
+- **Outcome:** worked with a workaround
+- **Fallback used:** none
+- **Notes:** The shot graphs read several outputs of `Collision|BreakHitResult`, which `read_graph_dsl` prints without saying which output is which (F-022), so writing the function again from its read-back was not safe. Each `DrawDebugLine` node was instead replaced in place: read its `connected_pins`, create a `CallFunction|ShotEffects` node, connect the same sources to `From`, `To` and `execute` and the same target to `then`, then delete the old node. `find_nodes` matches its `title` against the node's short title: `"Debug"` found the nodes, `"Draw Debug Line"` and `"Debug Line"` found none. Arithmetic on vectors reads back as `Math|Vector|vector*vector` but that id cannot be written ("does not exist"); write `(* vector 70.0)` and `(+ a b)`, which make the same nodes.
+
+### F-045: frame rate and live effect counts are read with editor Python, with the background throttle switched off
+
+- **Ticket:** #12
+- **Capability:** PIE control
+- **Tool used:** `ConfigSettingsToolset.GetSectionPropertyValues`, `SetSectionProperties`; editor Python
+- **Outcome:** worked with a workaround
+- **Fallback used:** editor Python
+- **Notes:** No tool reports the frame rate. With the editor window in the background the editor runs at about 3 frames a second (see verify-loop.md), which hides any real cost. The setting is `bThrottleCPUWhenNotForeground` in container `Editor`, category `General`, section `EditorPerformanceSettings`. It was set to false for the measurement and back to true afterwards; it is a per-user preference and no tracked file changed. Frames per second is the change in `SystemLibrary.get_frame_count()` over the change in `GameplayStatics.get_real_time_seconds()` between two samples. Effects spawned at a location belong to the world settings actor, so `world.get_world_settings().get_components_by_class(unreal.NiagaraComponent)` lists the ones still alive. A dynamic material's parameter is read with `get_scalar_parameter_value("Flash")`.
