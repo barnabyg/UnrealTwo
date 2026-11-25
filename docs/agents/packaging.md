@@ -18,7 +18,7 @@ The editor can stay open: the script does not rebuild the editor's modules, and 
 Set-Location C:\docs\git\UnrealTwo; .\Packaged\Windows\Beacon.exe -windowed -ResX=1280 -ResY=720
 ```
 
-`Packaged/Windows/Beacon.exe` is a launcher. It starts `Packaged/Windows/Beacon/Binaries/Win64/Beacon.exe` and exits at once, so stop the game with `Get-Process Beacon | Stop-Process`, not through the process the launcher returned. The game writes its log to `Packaged/Windows/Beacon/Saved/Logs/Beacon.log` and its save to `Packaged/Windows/Beacon/Saved/SaveGames/BeaconSave.sav`, apart from the editor's.
+`Packaged/Windows/Beacon.exe` launches `Packaged/Windows/Beacon/Binaries/Win64/Beacon.exe`. Choose **Quit to Desktop** on the main menu or game-over screen to exit. During play, press **B** to open the build menu and choose **Quit to Desktop**. Pressing **B** again closes the menu and returns to play. The game writes its log to `Packaged/Windows/Beacon/Saved/Logs/Beacon.log` and its save to `Packaged/Windows/Beacon/Saved/SaveGames/BeaconSave.sav`, apart from the editor's.
 
 ## Check it without a person
 
@@ -32,7 +32,7 @@ Wait for `BEACON_NIGHT_RESULT` in the game's log, read the line, then stop the g
 
 ## Manual check
 
-1. Delete `Packaged/Windows/Beacon/Saved/SaveGames` if it exists, then run the game. The menu shows only **Play**.
+1. With a fresh save directory, run the game. The menu offers **Play** and **Quit to Desktop**.
 2. Click **Play**, press Enter to skip the intro. Day 1 starts with 60 resources.
 3. Press E to place a Sentry, then N to start the night. With one or two turrets night 1 is usually lost: "THE LIGHTHOUSE HAS FALLEN".
-4. Close the game and run it again. The menu shows **Continue** and **New Game**. Continue opens day 1 with the resources saved at its start.
+4. Choose **Quit to Desktop** on the game-over screen and run the game again. The menu offers **Continue**, **New Game** and **Quit to Desktop**. Continue opens day 1 with the resources saved at its start.
